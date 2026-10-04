@@ -1,19 +1,17 @@
-import '../entities/game_category.dart';
-import '../entities/game_item.dart';
+import '../entities/encyclopedia_entry.dart';
+import '../entities/entry_category.dart';
 
-/// Abstract Repository.
-/// The UI/Riverpod providers will ONLY interact with this interface.
+/// Domain-level contract for the Frontier Lands encyclopedia.
 abstract class GameRepository {
-  Future<List<GameCategory>> fetchCategories();
-  Future<void> addCategory(GameCategory category);
-  Future<void> editCategory(GameCategory category);
-  Future<void> removeCategory(int id);
+  /// Opens the database and seeds it from `assets/seed_data.json` when empty.
+  Future<void> initialize();
 
-  Future<List<GameItem>> fetchItems(int categoryId);
-  Future<void> addItem(GameItem item);
-  Future<void> editItem(GameItem item);
-  Future<void> removeItem(int id);
+  Future<List<EncyclopediaEntry>> fetchEntries(EntryCategory category);
+  Future<int> addEntry(EncyclopediaEntry entry);
+  Future<void> editEntry(EncyclopediaEntry entry);
+  Future<void> removeEntry(EntryCategory category, int id);
 
+  // Backup
   Future<String> exportData();
   Future<void> importData(String jsonData);
 }

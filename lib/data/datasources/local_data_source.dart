@@ -1,22 +1,21 @@
-import '../../domain/entities/game_category.dart';
-import '../../domain/entities/game_item.dart';
+import '../../domain/entities/entry_category.dart';
 
 /// Abstract Local Data Source. 
 /// If you ever switch from sqflite to Isar or Hive, you only implement this interface.
 abstract class LocalDataSource {
   Future<void> initDb();
-  
-  // Categories
-  Future<List<GameCategory>> getCategories();
-  Future<int> insertCategory(GameCategory category);
-  Future<void> updateCategory(GameCategory category);
-  Future<void> deleteCategory(int id);
 
-  // Items
-  Future<List<GameItem>> getItemsByCategory(int categoryId);
-  Future<int> insertItem(GameItem item);
-  Future<void> updateItem(GameItem item);
-  Future<void> deleteItem(int id);
+  /// `true` when none of the encyclopedia tables contain a single row.
+  Future<bool> isEmpty();
+
+  /// Inserts many rows per table inside one transaction (used for seeding).
+  Future<void> bulkInsert(Map<EntryCategory, List<Map<String, Object?>>> rowsByCategory);
+
+  // Entries (materials / armors / monsters)
+  Future<List<Map<String, Object?>>> getAll(EntryCategory category);
+  Future<int> insert(EntryCategory category, Map<String, Object?> row);
+  Future<void> update(EntryCategory category, int id, Map<String, Object?> row);
+  Future<void> delete(EntryCategory category, int id);
   
   // Backup
   Future<String> exportDatabaseToJson();

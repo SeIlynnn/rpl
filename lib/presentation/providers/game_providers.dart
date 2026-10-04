@@ -1,84 +1,74 @@
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_riverpod/legacy.dart';
+import '../../data/datasources/local_data_source.dart';
 import '../../data/datasources/sqflite_data_source.dart';
 import '../../data/repositories/game_repository_impl.dart';
 import '../../domain/repositories/game_repository.dart';
-import '../../domain/entities/game_category.dart';
-import '../../domain/entities/game_item.dart';
+import '../../domain/entities/encyclopedia_entry.dart';
+import '../../domain/entities/entry_category.dart';
 
-// --- Core Database Provider ---
+const seedAssetPath = 'assets/seed_data.json';
+
+// --- Core Database Providers ---
+final localDataSourceProvider = Provider<LocalDataSource>((ref) => SqfliteDataSource());
+
+/// Opens SQLite and seeds it from [seedAssetPath] on first launch.
 final repositoryProvider = FutureProvider<GameRepository>((ref) async {
-  final sqfliteDataSource = SqfliteDataSource();
-  await sqfliteDataSource.initDb();
-  return GameRepositoryImpl(localDataSource: sqfliteDataSource);
+  final repository = GameRepositoryImpl(
+    localDataSource: ref.watch(localDataSourceProvider),
+    seedLoader: () => rootBundle.loadString(seedAssetPath),
+  );
+  await repository.initialize();
+  return repository;
 });
 
-// --- Categories State Management ---
-class CategoriesNotifier extends AsyncNotifier<List<GameCategory>> {
+// --- Entries State Management (one list per category) ---
+class EntriesNotifier extends AsyncNotifier<List<EncyclopediaEntry>> {
+  final EntryCategory category;
+  EntriesNotifier(this.category);
+
   @override
-  Future<List<GameCategory>> build() async {
+  Future<List<EncyclopediaEntry>> build() async {
     final repo = await ref.watch(repositoryProvider.future);
-    return repo.fetchCategories();
+    return repo.fetchEntries(category);
   }
 
-  Future<void> addCategory(GameCategory category) async {
+  Future<void> addEntry(EncyclopediaEntry entry) async {
     final repo = await ref.read(repositoryProvider.future);
-    await repo.addCategory(category);
+    await repo.addEntry(entry);
     ref.invalidateSelf();
+    await future;
   }
 
-  Future<void> updateCategory(GameCategory category) async {
+  Future<void> updateEntry(EncyclopediaEntry entry) async {
     final repo = await ref.read(repositoryProvider.future);
-    await repo.editCategory(category);
+    await repo.editEntry(entry);
     ref.invalidateSelf();
+    await future;
   }
 
-  Future<void> removeCategory(int id) async {
+  Future<void> removeEntry(EncyclopediaEntry entry) async {
+    final id = entry.id;
+    if (id == null) return;
     final repo = await ref.read(repositoryProvider.future);
-    await repo.removeCategory(id);
+    await repo.removeEntry(category, id);
     ref.invalidateSelf();
+    await future;
   }
 }
 
-final categoriesProvider =
-    AsyncNotifierProvider<CategoriesNotifier, List<GameCategory>>(
-      CategoriesNotifier.new,
+final entriesProvider =
+    AsyncNotifierProvider.family<EntriesNotifier, List<EncyclopediaEntry>, EntryCategory>(
+      EntriesNotifier.new,
     );
 
-// --- Items State Management (Filtered by Category) ---
-class ItemsNotifier extends AsyncNotifier<List<GameItem>> {
-  final int categoryId;
-  ItemsNotifier(this.categoryId);
-
+// --- UI State Provider (selected bottom navigation tab) ---
+class SelectedCategoryNotifier extends Notifier<EntryCategory> {
   @override
-  Future<List<GameItem>> build() async {
-    final repo = await ref.watch(repositoryProvider.future);
-    return repo.fetchItems(categoryId);
-  }
+  EntryCategory build() => EntryCategory.materials;
 
-  Future<void> addItem(GameItem item) async {
-    final repo = await ref.read(repositoryProvider.future);
-    await repo.addItem(item);
-    ref.invalidateSelf();
-  }
-
-  Future<void> updateItem(GameItem item) async {
-    final repo = await ref.read(repositoryProvider.future);
-    await repo.editItem(item);
-    ref.invalidateSelf();
-  }
-
-  Future<void> removeItem(int id) async {
-    final repo = await ref.read(repositoryProvider.future);
-    await repo.removeItem(id);
-    ref.invalidateSelf();
-  }
+  void select(EntryCategory category) => state = category;
 }
 
-final itemsProvider =
-    AsyncNotifierProvider.family<ItemsNotifier, List<GameItem>, int>(
-      ItemsNotifier.new,
-    );
-
-// --- UI State Provider ---
-final selectedCategoryProvider = StateProvider<GameCategory?>((ref) => null);
+final selectedCategoryProvider =
+    NotifierProvider<SelectedCategoryNotifier, EntryCategory>(SelectedCategoryNotifier.new);

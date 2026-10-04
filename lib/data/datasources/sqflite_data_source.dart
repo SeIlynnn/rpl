@@ -1,109 +1,150 @@
 import 'dart:convert';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
-import '../../domain/entities/game_category.dart';
-import '../../domain/entities/game_item.dart';
+import '../../domain/entities/entry_category.dart';
 import 'local_data_source.dart';
 
 class SqfliteDataSource implements LocalDataSource {
+  static const _dbName = 'companion_app.db';
+
+  /// v1 = generic prototype (categories/items), v2 = Frontier Lands encyclopedia.
+  static const _dbVersion = 2;
+
   Database? _db;
+
+  Database get _database {
+    final db = _db;
+    if (db == null) {
+      throw StateError('SqfliteDataSource.initDb() must be called first.');
+    }
+    return db;
+  }
 
   @override
   Future<void> initDb() async {
     if (_db != null) return;
     
     final dbPath = await getDatabasesPath();
-    final path = join(dbPath, 'companion_app.db');
+    final path = join(dbPath, _dbName);
     
     _db = await openDatabase(
       path,
-      version: 1,
-      onCreate: (db, version) async {
-        await db.execute('''
-          CREATE TABLE categories (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            iconPath TEXT
-          )
-        ''');
-        await db.execute('''
-          CREATE TABLE items (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            categoryId INTEGER NOT NULL,
-            title TEXT NOT NULL,
-            description TEXT NOT NULL,
-            imagePath TEXT,
-            stats TEXT,
-            FOREIGN KEY (categoryId) REFERENCES categories (id) ON DELETE CASCADE
-          )
-        ''');
+      version: _dbVersion,
+      onCreate: (db, version) => _createEncyclopediaTables(db),
+      onUpgrade: (db, oldVersion, newVersion) async {
+        // v1 -> v2: introduce the encyclopedia tables. The legacy prototype
+        // tables (categories/items) are intentionally left untouched so no
+        // user data is destroyed by the upgrade.
+        if (oldVersion < 2) await _createEncyclopediaTables(db);
       },
     );
   }
 
-  // --- CATEGORIES ---
-  @override
-  Future<List<GameCategory>> getCategories() async {
-    final maps = await _db!.query('categories');
-    return maps.map((json) => GameCategory.fromJson(json)).toList();
+  /// Column names match the keys of `assets/seed_data.json` 1:1.
+  /// `"no"`, `"type"` and `"def"` are quoted because they are SQL keywords.
+  Future<void> _createEncyclopediaTables(Database db) async {
+    final batch = db.batch();
+    batch.execute('''
+      CREATE TABLE IF NOT EXISTS materials (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        "no" INTEGER,
+        item_id INTEGER NOT NULL,
+        nama_item TEXT NOT NULL,
+        rarity INTEGER,
+        item_type TEXT,
+        item_drop TEXT,
+        persentase REAL,
+        image_path TEXT
+      )
+    ''');
+    batch.execute('''
+      CREATE TABLE IF NOT EXISTS armors (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        "no" INTEGER,
+        item_id INTEGER NOT NULL,
+        nama_item TEXT NOT NULL,
+        rarity INTEGER,
+        "type" TEXT,
+        stats TEXT,
+        skill TEXT,
+        image_path TEXT
+      )
+    ''');
+    batch.execute('''
+      CREATE TABLE IF NOT EXISTS monsters (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        "no" INTEGER NOT NULL,
+        nama TEXT NOT NULL,
+        title TEXT,
+        habitat TEXT,
+        classification TEXT,
+        imun_to TEXT,
+        item_drop TEXT,
+        max_health TEXT,
+        "def" TEXT,
+        size TEXT,
+        image_path TEXT
+      )
+    ''');
+    await batch.commit(noResult: true);
   }
 
   @override
-  Future<int> insertCategory(GameCategory category) async {
-    return await _db!.insert('categories', category.toJson());
+  Future<bool> isEmpty() async {
+    for (final category in EntryCategory.values) {
+      final count = Sqflite.firstIntValue(
+        await _database.rawQuery('SELECT COUNT(*) FROM ${category.tableName}'),
+      );
+      if ((count ?? 0) > 0) return false;
+    }
+    return true;
   }
 
   @override
-  Future<void> updateCategory(GameCategory category) async {
-    await _db!.update(
-      'categories',
-      category.toJson(),
+  Future<void> bulkInsert(Map<EntryCategory, List<Map<String, Object?>>> rowsByCategory) async {
+    await _database.transaction((txn) async {
+      final batch = txn.batch();
+      rowsByCategory.forEach((category, rows) {
+        for (final row in rows) {
+          batch.insert(category.tableName, row);
+        }
+      });
+      await batch.commit(noResult: true);
+    });
+  }
+
+  // --- ENTRIES ---
+  @override
+  Future<List<Map<String, Object?>>> getAll(EntryCategory category) {
+    return _database.query(category.tableName, orderBy: '"no" ASC, id ASC');
+  }
+
+  @override
+  Future<int> insert(EntryCategory category, Map<String, Object?> row) {
+    return _database.insert(category.tableName, row);
+  }
+
+  @override
+  Future<void> update(EntryCategory category, int id, Map<String, Object?> row) async {
+    await _database.update(
+      category.tableName,
+      Map.of(row)..remove('id'),
       where: 'id = ?',
-      whereArgs: [category.id],
+      whereArgs: [id],
     );
   }
 
   @override
-  Future<void> deleteCategory(int id) async {
-    await _db!.delete('categories', where: 'id = ?', whereArgs: [id]);
-  }
-
-  // --- ITEMS ---
-  @override
-  Future<List<GameItem>> getItemsByCategory(int categoryId) async {
-    final maps = await _db!.query('items', where: 'categoryId = ?', whereArgs: [categoryId]);
-    return maps.map((json) => GameItem.fromJson(json)).toList();
-  }
-
-  @override
-  Future<int> insertItem(GameItem item) async {
-    return await _db!.insert('items', item.toJson());
-  }
-
-  @override
-  Future<void> updateItem(GameItem item) async {
-    await _db!.update(
-      'items',
-      item.toJson(),
-      where: 'id = ?',
-      whereArgs: [item.id],
-    );
-  }
-
-  @override
-  Future<void> deleteItem(int id) async {
-    await _db!.delete('items', where: 'id = ?', whereArgs: [id]);
+  Future<void> delete(EntryCategory category, int id) async {
+    await _database.delete(category.tableName, where: 'id = ?', whereArgs: [id]);
   }
 
   // --- BACKUP & RESTORE ---
   @override
   Future<String> exportDatabaseToJson() async {
-    final categories = await _db!.query('categories');
-    final items = await _db!.query('items');
-    
-    final backupData = {
-      'categories': categories,
-      'items': items,
+    final backupData = <String, Object?>{
+      for (final category in EntryCategory.values)
+        category.tableName: await _database.query(category.tableName),
     };
     return jsonEncode(backupData);
   }
@@ -111,20 +152,15 @@ class SqfliteDataSource implements LocalDataSource {
   @override
   Future<void> importDatabaseFromJson(String jsonData) async {
     final Map<String, dynamic> backupData = jsonDecode(jsonData);
-    final categories = backupData['categories'] as List;
-    final items = backupData['items'] as List;
 
-    await _db!.transaction((txn) async {
-      // Clear existing data
-      await txn.delete('items');
-      await txn.delete('categories');
-
-      // Insert restored data
-      for (var cat in categories) {
-        await txn.insert('categories', cat as Map<String, Object?>);
-      }
-      for (var item in items) {
-        await txn.insert('items', item as Map<String, Object?>);
+    await _database.transaction((txn) async {
+      for (final category in EntryCategory.values) {
+        final rows = backupData[category.tableName] as List? ?? const [];
+        // Clear existing data, then insert restored data
+        await txn.delete(category.tableName);
+        for (final row in rows) {
+          await txn.insert(category.tableName, Map<String, Object?>.from(row as Map));
+        }
       }
     });
   }

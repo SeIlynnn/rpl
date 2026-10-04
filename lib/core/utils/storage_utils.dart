@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 
@@ -17,7 +18,7 @@ class StorageUtils {
       final savedFile = await originalFile.copy(savedImagePath);
       return savedFile.path;
     } catch (e) {
-      print("Error saving image: $e");
+      debugPrint("Error saving image: $e");
       return null;
     }
   }
@@ -27,5 +28,19 @@ class StorageUtils {
     final appDir = await getApplicationDocumentsDirectory(); // Or getExternalStorageDirectory() on Android
     final backupFile = File(p.join(appDir.path, 'companion_backup_${DateTime.now().millisecondsSinceEpoch}.json'));
     return await backupFile.writeAsString(jsonString);
+  }
+
+  /// Deletes an image previously created by [persistImageLocally].
+  /// Files outside the app documents directory are never touched.
+  static Future<void> deleteLocalImage(String? path) async {
+    if (path == null) return;
+    try {
+      final appDir = await getApplicationDocumentsDirectory();
+      if (!p.isWithin(appDir.path, path)) return;
+      final file = File(path);
+      if (await file.exists()) await file.delete();
+    } catch (e) {
+      debugPrint("Error deleting image: $e");
+    }
   }
 }
