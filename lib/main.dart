@@ -1,19 +1,34 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'presentation/ui/main_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Load environment variables from .env
   try {
-    await Supabase.initialize(
-      url: 'https://qqgidnsnnmbvnsvpoifb.supabase.co',
-      // ignore: deprecated_member_use
-      anonKey:
-          'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFxZ2lkbnNubm1idm5zdnBvaWZiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIyMTM5NzYsImV4cCI6MjEwNzc4OTk3Nn0.ZfEcDxBm27w-QhoWLorF8zlnS9hqArq5QQf66DN3XCA',
-    );
+    await dotenv.load(fileName: ".env");
   } catch (e) {
-    debugPrint('Supabase init error: $e');
+    debugPrint('Notice: .env file not found or failed to load: ');
+  }
+
+  final supabaseUrl = dotenv.env['SUPABASE_URL'] ?? '';
+  final supabaseAnonKey = dotenv.env['SUPABASE_ANON_KEY'] ?? '';
+
+  if (supabaseUrl.isNotEmpty && supabaseAnonKey.isNotEmpty) {
+    try {
+      await Supabase.initialize(
+        url: supabaseUrl,
+        // ignore: deprecated_member_use
+        anonKey: supabaseAnonKey,
+      );
+    } catch (e) {
+      debugPrint('Supabase init error: ');
+    }
+  } else {
+    debugPrint('Notice: SUPABASE_URL or SUPABASE_ANON_KEY not set in .env. Running offline-first.');
   }
 
   runApp(
@@ -34,7 +49,7 @@ class CompanionApp extends StatelessWidget {
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
           seedColor: Colors.deepPurple,
-          brightness: Brightness.dark, 
+          brightness: Brightness.dark,
         ),
         useMaterial3: true,
       ),

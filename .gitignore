@@ -50,3 +50,7 @@ app.*.map.json
 # Python tooling (tools/extract_seed_data.py)
 .venv/
 __pycache__/
+
+# Environment variables
+.env
+!.env.example
