@@ -7,8 +7,9 @@ import 'local_data_source.dart';
 class SqfliteDataSource implements LocalDataSource {
   static const _dbName = 'companion_app.db';
 
-  /// v1 = generic prototype (categories/items), v2 = Frontier Lands encyclopedia.
-  static const _dbVersion = 2;
+  /// v1 = generic prototype, v2 = Frontier Lands, v3 = weapons & charms,
+  /// v4 = updated weapon stats, v5 = rarity for all categories.
+  static const _dbVersion = 7;
 
   Database? _db;
 
@@ -23,45 +24,45 @@ class SqfliteDataSource implements LocalDataSource {
   @override
   Future<void> initDb() async {
     if (_db != null) return;
-    
+
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, _dbName);
-    
+
     _db = await openDatabase(
       path,
       version: _dbVersion,
       onCreate: (db, version) => _createEncyclopediaTables(db),
       onUpgrade: (db, oldVersion, newVersion) async {
-        // v1 -> v2: introduce the encyclopedia tables. The legacy prototype
-        // tables (categories/items) are intentionally left untouched so no
-        // user data is destroyed by the upgrade.
-        if (oldVersion < 2) await _createEncyclopediaTables(db);
+        await _createEncyclopediaTables(db);
       },
     );
   }
 
-  /// Column names match the keys of `assets/seed_data.json` 1:1.
-  /// `"no"`, `"type"` and `"def"` are quoted because they are SQL keywords.
   Future<void> _createEncyclopediaTables(Database db) async {
     final batch = db.batch();
+
+    // --- MATERIALS (Sudah ada rarity) ---
     batch.execute('''
       CREATE TABLE IF NOT EXISTS materials (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         "no" INTEGER,
-        item_id INTEGER NOT NULL,
+        item_id INTEGER,
         nama_item TEXT NOT NULL,
         rarity INTEGER,
         item_type TEXT,
         item_drop TEXT,
+        object_drop TEXT, 
         persentase REAL,
         image_path TEXT
       )
     ''');
+
+    // --- ARMORS (Sudah ada rarity) ---
     batch.execute('''
       CREATE TABLE IF NOT EXISTS armors (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         "no" INTEGER,
-        item_id INTEGER NOT NULL,
+        item_id INTEGER,
         nama_item TEXT NOT NULL,
         rarity INTEGER,
         "type" TEXT,
@@ -70,6 +71,8 @@ class SqfliteDataSource implements LocalDataSource {
         image_path TEXT
       )
     ''');
+
+    // --- MONSTERS (Tidak berubah) ---
     batch.execute('''
       CREATE TABLE IF NOT EXISTS monsters (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -86,6 +89,49 @@ class SqfliteDataSource implements LocalDataSource {
         image_path TEXT
       )
     ''');
+
+    // --- WEAPONS (Tambahkan rarity) ---
+    batch.execute('''
+      CREATE TABLE IF NOT EXISTS weapons (
+         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        "no" INTEGER,
+        item_id INTEGER,
+        nama_item TEXT NOT NULL,
+        rarity INTEGER,
+        role TEXT,                
+        normal_stats TEXT,
+        negative_stats TEXT,
+        skill_aktif TEXT,        
+        image_path TEXT
+      )
+    ''');
+
+    // --- CHARMS (Tambahkan rarity) ---
+    batch.execute('''
+      CREATE TABLE IF NOT EXISTS charms (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        "no" INTEGER,
+        item_id INTEGER,
+        nama_item TEXT NOT NULL,
+        rarity INTEGER,
+        stats TEXT,
+        image_path TEXT
+      )
+    ''');
+
+    batch.execute('''
+      CREATE TABLE IF NOT EXISTS animals (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        "no" INTEGER,
+        item_id INTEGER,
+        nama TEXT NOT NULL,
+        total_hp INTEGER,
+        habitat TEXT,
+        item_drop TEXT,
+        image_path TEXT
+      )
+    ''');
+
     await batch.commit(noResult: true);
   }
 
@@ -113,7 +159,6 @@ class SqfliteDataSource implements LocalDataSource {
     });
   }
 
-  // --- ENTRIES ---
   @override
   Future<List<Map<String, Object?>>> getAll(EntryCategory category) {
     return _database.query(category.tableName, orderBy: '"no" ASC, id ASC');
@@ -139,7 +184,6 @@ class SqfliteDataSource implements LocalDataSource {
     await _database.delete(category.tableName, where: 'id = ?', whereArgs: [id]);
   }
 
-  // --- BACKUP & RESTORE ---
   @override
   Future<String> exportDatabaseToJson() async {
     final backupData = <String, Object?>{
@@ -156,7 +200,6 @@ class SqfliteDataSource implements LocalDataSource {
     await _database.transaction((txn) async {
       for (final category in EntryCategory.values) {
         final rows = backupData[category.tableName] as List? ?? const [];
-        // Clear existing data, then insert restored data
         await txn.delete(category.tableName);
         for (final row in rows) {
           await txn.insert(category.tableName, Map<String, Object?>.from(row as Map));

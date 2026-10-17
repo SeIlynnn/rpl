@@ -439,7 +439,7 @@ class _DroppedBySection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final monsters = ref.watch(entriesProvider(EntryCategory.monsters)).value ?? const [];
-    final needle = material.namaItem.trim().toLowerCase();
+    final needle = (material.namaItem ?? material.name).trim().toLowerCase();
     final sources = monsters
         .whereType<Monster>()
         .where((m) => m.dropList.any((d) => d.toLowerCase() == needle))
@@ -452,7 +452,7 @@ class _DroppedBySection extends ConsumerWidget {
       children: [
         for (final monster in sources)
           _LinkedTile(
-            name: monster.nama,
+            name: monster.name,
             target: monster,
             fallbackIcon: EntryCategory.monsters.icon,
             missingText: '',
