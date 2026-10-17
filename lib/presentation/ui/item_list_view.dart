@@ -3,109 +3,74 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../domain/entities/encyclopedia_entry.dart';
 import '../../domain/entities/entry_category.dart';
 import '../../domain/entities/monster.dart';
+import '../../domain/entities/game_material.dart';
+import '../../domain/entities/weapon.dart';
+import '../../domain/entities/armor.dart';
+import '../../domain/entities/charm.dart';
 import '../providers/game_providers.dart';
+import '../../domain/entities/animal.dart';
 import 'category_ui.dart';
 import 'entry_actions.dart';
 import 'entry_widgets.dart';
 
-/// Searchable list of every record in one [category].
-class ItemListView extends ConsumerStatefulWidget {
+/// Menampilkan daftar entri untuk satu kategori.
+/// Jika ada kata kunci pencarian global, cari di SEMUA kategori.
+class ItemListView extends ConsumerWidget {
   final EntryCategory category;
 
   const ItemListView({super.key, required this.category});
 
-  @override
-  ConsumerState<ItemListView> createState() => _ItemListViewState();
-}
-
-class _ItemListViewState extends ConsumerState<ItemListView>
-    with AutomaticKeepAliveClientMixin {
-  final _searchCtrl = TextEditingController();
-  String _query = '';
-
-  @override
-  bool get wantKeepAlive => true;
-
-  @override
-  void dispose() {
-    _searchCtrl.dispose();
-    super.dispose();
-  }
-
-  bool _matches(EncyclopediaEntry entry) {
-    if (_query.isEmpty) return true;
+  // Logika pencarian yang mencakup banyak field
+  bool _matches(EncyclopediaEntry entry, String query) {
+    if (query.isEmpty) return false;
     final haystack = [
       entry.name,
-      entrySubtitle(entry),
-      if (entry is Monster) ...[entry.classification, entry.itemDrop],
+      entry.category.singular,
+      entry.category.label,
+      if (entry is Monster) ...[entry.classification, entry.habitat, entry.title],
+      if (entry is GameMaterial) ...[entry.itemType, entry.itemDrop, entry.objectDrop],
+      if (entry is Animal) ...[entry.habitat, entry.itemDrop, '${entry.totalHp}'],
+      if (entry is Weapon) ...[entry.role, entry.normalStats, entry.negativeStats, entry.skillAktif],
+      if (entry is Armor) ...[entry.type, entry.stats],
+      if (entry is Charm) ...[entry.stats],
     ].whereType<String>().join(' ').toLowerCase();
-    return haystack.contains(_query);
+    return haystack.contains(query);
   }
 
   @override
-  Widget build(BuildContext context) {
-    super.build(context);
-    final category = widget.category;
-    final entriesAsync = ref.watch(entriesProvider(category));
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Pantau kata kunci pencarian dari provider global
+    final searchQuery = ref.watch(searchQueryProvider).toLowerCase();
+    // Ambil semua data dari semua kategori
+    final allEntriesAsync = ref.watch(allEntriesProvider);
 
-    return entriesAsync.when(
-      data: (entries) {
-        final visible = entries.where(_matches).toList(growable: false);
-        return CustomScrollView(
+    return allEntriesAsync.when(
+      data: (allEntries) {
+        // LOGIKA UTAMA:
+        // - Jika search kosong -> Tampilkan hanya kategori saat ini
+        // - Jika search ada isinya -> Cari di SEMUA kategori
+        final visible = searchQuery.isEmpty
+            ? allEntries.where((e) => e.category == category).toList()
+            : allEntries.where((e) => _matches(e, searchQuery)).toList();
+
+        if (visible.isEmpty) {
+          return _EmptyState(
+            category: category,
+            isSearching: searchQuery.isNotEmpty,
+          );
+        }
+
+        return ListView.separated(
           key: PageStorageKey('list-${category.name}'),
-          slivers: [
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-                child: SearchBar(
-                  controller: _searchCtrl,
-                  hintText: 'Search ${category.label.toLowerCase()}',
-                  leading: const Icon(Icons.search),
-                  elevation: const WidgetStatePropertyAll(0),
-                  trailing: [
-                    if (_query.isNotEmpty)
-                      IconButton(
-                        tooltip: 'Clear',
-                        icon: const Icon(Icons.close),
-                        onPressed: () {
-                          _searchCtrl.clear();
-                          setState(() => _query = '');
-                        },
-                      ),
-                  ],
-                  onChanged: (value) => setState(() => _query = value.trim().toLowerCase()),
-                ),
-              ),
-            ),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 4),
-                child: Text(
-                  _query.isEmpty
-                      ? '${entries.length} ${category.label.toLowerCase()}'
-                      : '${visible.length} of ${entries.length} ${category.label.toLowerCase()}',
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                ),
-              ),
-            ),
-            if (visible.isEmpty)
-              SliverFillRemaining(
-                hasScrollBody: false,
-                child: _EmptyState(category: category, isSearching: _query.isNotEmpty),
-              )
-            else
-              SliverPadding(
-                // Leaves room so the FAB never hides the last row.
-                padding: const EdgeInsets.only(bottom: 96),
-                sliver: SliverList.separated(
-                  itemCount: visible.length,
-                  separatorBuilder: (_, _) => const Divider(height: 1, indent: 88),
-                  itemBuilder: (context, index) => _EntryTile(entry: visible[index]),
-                ),
-              ),
-          ],
+          padding: const EdgeInsets.only(bottom: 96),
+          itemCount: visible.length,
+          separatorBuilder: (_, __) => const Divider(height: 1, indent: 88),
+          itemBuilder: (context, index) {
+            final entry = visible[index];
+            // Tampilkan label kategori jika hasil pencarian dari kategori berbeda
+            final showCategory = searchQuery.isNotEmpty && entry.category != category;
+            return _EntryTile(entry: entry, showCategory: showCategory);
+          },
         );
       },
       loading: () => const Center(child: CircularProgressIndicator()),
@@ -119,8 +84,9 @@ class _ItemListViewState extends ConsumerState<ItemListView>
 
 class _EntryTile extends ConsumerWidget {
   final EncyclopediaEntry entry;
+  final bool showCategory;
 
-  const _EntryTile({required this.entry});
+  const _EntryTile({required this.entry, this.showCategory = false});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -150,15 +116,23 @@ class _EntryTile extends ConsumerWidget {
       ),
       subtitle: subtitle.isEmpty
           ? null
-          : Text(subtitle, maxLines: 2, overflow: TextOverflow.ellipsis),
+          : Text(
+        showCategory
+            ? '${entry.category.label} · $subtitle'
+            : subtitle,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+      ),
       trailing: rarity != null
           ? RarityBadge(rarity: rarity, dense: true)
           : entry0 is Monster
-              ? Text(
-                  '#${entry0.no}',
-                  style: theme.textTheme.labelLarge?.copyWith(color: theme.colorScheme.outline),
-                )
-              : null,
+          ? Text(
+        '#${entry0.no}',
+        style: theme.textTheme.labelLarge?.copyWith(
+          color: theme.colorScheme.outline,
+        ),
+      )
+          : null,
       onTap: () => openEntryDetail(context, entry),
       onLongPress: () => showEntryActionsSheet(context, ref, entry),
     );
@@ -179,14 +153,20 @@ class _EmptyState extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(isSearching ? Icons.search_off : category.icon, size: 64, color: theme.colorScheme.outline),
+          Icon(
+            isSearching ? Icons.search_off : category.icon,
+            size: 64,
+            color: theme.colorScheme.outline,
+          ),
           const SizedBox(height: 16),
           Text(
             isSearching
-                ? 'No ${category.label.toLowerCase()} match your search.'
+                ? 'No results found across all categories.'
                 : 'No ${category.label.toLowerCase()} yet.\nTap "Add ${category.singular}" to create one.',
             textAlign: TextAlign.center,
-            style: theme.textTheme.bodyLarge?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            style: theme.textTheme.bodyLarge?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
           ),
         ],
       ),
@@ -211,9 +191,11 @@ class _ErrorState extends StatelessWidget {
           children: [
             Icon(Icons.error_outline, size: 56, color: theme.colorScheme.error),
             const SizedBox(height: 12),
-            Text('Could not load the database', style: theme.textTheme.titleMedium),
+            Text('Could not load the database',
+                style: theme.textTheme.titleMedium),
             const SizedBox(height: 8),
-            Text(message, textAlign: TextAlign.center, style: theme.textTheme.bodySmall),
+            Text(message,
+                textAlign: TextAlign.center, style: theme.textTheme.bodySmall),
             const SizedBox(height: 16),
             FilledButton.tonalIcon(
               onPressed: onRetry,

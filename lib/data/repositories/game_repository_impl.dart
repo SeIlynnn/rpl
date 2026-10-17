@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart'; // Tambahkan ini untuk debugPrint
 
 import '../../domain/entities/encyclopedia_entry.dart';
 import '../../domain/entities/entry_category.dart';
@@ -27,17 +28,30 @@ class GameRepositoryImpl implements GameRepository {
   /// Each record is round-tripped through its entity so only known columns
   /// reach SQLite and values are normalised to the right types.
   Future<void> _seedFromAssets() async {
-    final Map<String, dynamic> seed = jsonDecode(await seedLoader());
+    try {
+      final String jsonString = await seedLoader();
 
-    final rowsByCategory = <EntryCategory, List<Map<String, Object?>>>{
-      for (final category in EntryCategory.values)
-        category: [
-          for (final record in (seed[category.tableName] as List? ?? const []))
-            category.fromMap(Map<String, Object?>.from(record as Map)).toMap(),
-        ],
-    };
+      // Jika file kosong atau hanya berisi spasi, hentikan proses seeding
+      if (jsonString.trim().isEmpty) {
+        debugPrint("Seed data kosong, melewati proses seeding.");
+        return;
+      }
 
-    await localDataSource.bulkInsert(rowsByCategory);
+      final Map<String, dynamic> seed = jsonDecode(jsonString);
+
+      final rowsByCategory = <EntryCategory, List<Map<String, Object?>>>{
+        for (final category in EntryCategory.values)
+          category: [
+            for (final record in (seed[category.tableName] as List? ?? const []))
+              category.fromMap(Map<String, Object?>.from(record as Map)).toMap(),
+          ],
+      };
+
+      await localDataSource.bulkInsert(rowsByCategory);
+    } catch (e) {
+      // Menangkap error jika format JSON salah, agar aplikasi tidak crash
+      debugPrint("Gagal membaca atau memproses seed data: $e");
+    }
   }
 
   @override
