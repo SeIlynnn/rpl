@@ -1,4 +1,4 @@
-name: rpl
+﻿name: rpl
 description: "Tugas RPL database"
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
@@ -40,6 +40,7 @@ dependencies:
   path_provider: ^2.1.6
   image_picker: ^1.2.3
   file_picker: ^13.1.0
+  supabase_flutter: ^2.8.0
 
 dependency_overrides:
   path_provider_android: 2.2.15

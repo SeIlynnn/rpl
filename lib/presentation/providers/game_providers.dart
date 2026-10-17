@@ -1,7 +1,7 @@
-import 'package:flutter/services.dart' show rootBundle;
+﻿import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/datasources/local_data_source.dart';
-import '../../data/datasources/sqflite_data_source.dart';
+import '../../data/datasources/supabase_data_source.dart';
 import '../../data/repositories/game_repository_impl.dart';
 import '../../domain/repositories/game_repository.dart';
 import '../../domain/entities/encyclopedia_entry.dart';
@@ -11,7 +11,7 @@ const seedAssetPath = 'assets/seed_data.json';
 
 // --- Core Database Providers ---
 final localDataSourceProvider =
-Provider<LocalDataSource>((ref) => SqfliteDataSource());
+Provider<LocalDataSource>((ref) => SupabaseDataSource());
 
 /// Opens SQLite and seeds it from [seedAssetPath] on first launch.
 final repositoryProvider = FutureProvider<GameRepository>((ref) async {
