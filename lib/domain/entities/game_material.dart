@@ -26,12 +26,11 @@ class GameMaterial extends EncyclopediaEntry {
   Map<String, Object?> toMap() {
     return {
       'id': id,
-      'nama_item': name, // <--- Ubah 'name' jadi 'nama_item' (sesuai DB)
+      'nama_item': namaItem ?? name,
       'image_path': imagePath,
       'rarity': rarity,
-      'item_type': itemType, // <--- Ubah 'itemType' jadi 'item_type'
-      'item_drop': itemDrop, // <--- Ubah 'itemDrop' jadi 'item_drop'
-      'nama_item': namaItem ?? name,
+      'item_type': itemType,
+      'item_drop': itemDrop,
       'object_drop': objectDrop,
     };
   }

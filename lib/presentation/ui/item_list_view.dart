@@ -64,7 +64,7 @@ class ItemListView extends ConsumerWidget {
           key: PageStorageKey('list-${category.name}'),
           padding: const EdgeInsets.only(bottom: 96),
           itemCount: visible.length,
-          separatorBuilder: (_, __) => const Divider(height: 1, indent: 88),
+          separatorBuilder: (_, _) => const Divider(height: 1, indent: 88),
           itemBuilder: (context, index) {
             final entry = visible[index];
             // Tampilkan label kategori jika hasil pencarian dari kategori berbeda
