@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/utils/map_parsing.dart';
 import '../../domain/entities/armor.dart';
@@ -6,6 +6,9 @@ import '../../domain/entities/encyclopedia_entry.dart';
 import '../../domain/entities/entry_category.dart';
 import '../../domain/entities/game_material.dart';
 import '../../domain/entities/monster.dart';
+import '../../domain/entities/weapon.dart';
+import '../../domain/entities/charm.dart';
+import '../../domain/entities/animal.dart';
 import '../providers/game_providers.dart';
 import 'category_ui.dart';
 import 'entry_actions.dart';
@@ -131,7 +134,7 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> {
             child: Padding(
               padding: const EdgeInsets.fromLTRB(24, 8, 24, 32),
               child: Text(
-                'Database ID ${entry.id} · ${entry.category.singular}',
+                'Database ID ${entry.id} Â· ${entry.category.singular}',
                 style: theme.textTheme.bodySmall?.copyWith(color: scheme.outline),
               ),
             ),
@@ -181,6 +184,9 @@ class _TitleBlock extends StatelessWidget {
       Monster m => m.title,
       Armor a => a.stats,
       GameMaterial m => m.itemType,
+      Weapon w => w.role,
+      Charm c => c.stats,
+      Animal an => an.habitat,
       _ => null,
     };
 
@@ -191,6 +197,8 @@ class _TitleBlock extends StatelessWidget {
         (icon: Icons.account_tree_outlined, label: e.classification!),
       if (e is Monster && e.habitat != null) (icon: Icons.terrain_outlined, label: e.habitat!),
       if (e is Monster && e.size != null) (icon: Icons.straighten, label: e.size!),
+      if (e is Weapon && e.role != null) (icon: Icons.shield_outlined, label: e.role!),
+      if (e is Animal && e.habitat != null) (icon: Icons.place_outlined, label: e.habitat!),
     ];
 
     return Padding(
@@ -300,7 +308,7 @@ class _StatRow extends StatelessWidget {
 
     final Widget valueWidget;
     if (raw == null || (raw is String && raw.isEmpty)) {
-      valueWidget = Text('—', style: valueStyle?.copyWith(color: scheme.outline));
+      valueWidget = Text('-', style: valueStyle?.copyWith(color: scheme.outline));
     } else {
       valueWidget = switch (field.kind) {
         FieldKind.rarity => RarityBadge(rarity: MapParsing.asInt(raw) ?? 1, dense: true),

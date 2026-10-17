@@ -1330,6 +1330,85 @@
                    }
                ],
     "animals":  [
-
+                    {
+                        "id":  1,
+                        "no":  1,
+                        "item_id":  201,
+                        "nama":  "Forest Boar",
+                        "total_hp":  120,
+                        "habitat":  "Luminer Cave",
+                        "item_drop":  "meat, small leather",
+                        "image_path":  null
+                    },
+                    {
+                        "id":  2,
+                        "no":  2,
+                        "item_id":  202,
+                        "nama":  "Cave Marmot",
+                        "total_hp":  80,
+                        "habitat":  "Luminer Cave",
+                        "item_drop":  "small leather, meat",
+                        "image_path":  null
+                    },
+                    {
+                        "id":  3,
+                        "no":  3,
+                        "item_id":  203,
+                        "nama":  "Giant Snail",
+                        "total_hp":  95,
+                        "habitat":  "Luminer Cave",
+                        "item_drop":  "snail shell, Snail Meat",
+                        "image_path":  null
+                    },
+                    {
+                        "id":  4,
+                        "no":  4,
+                        "item_id":  204,
+                        "nama":  "Green Slime",
+                        "total_hp":  60,
+                        "habitat":  "Ancient Swarm",
+                        "item_drop":  "slime extract",
+                        "image_path":  null
+                    },
+                    {
+                        "id":  5,
+                        "no":  5,
+                        "item_id":  205,
+                        "nama":  "Giant Cricket",
+                        "total_hp":  50,
+                        "habitat":  "Ancient Swarm",
+                        "item_drop":  "cricket, string",
+                        "image_path":  null
+                    },
+                    {
+                        "id":  6,
+                        "no":  6,
+                        "item_id":  206,
+                        "nama":  "Horned Ram",
+                        "total_hp":  140,
+                        "habitat":  "Death Desert",
+                        "item_drop":  "smallhorn, medium leather",
+                        "image_path":  null
+                    },
+                    {
+                        "id":  7,
+                        "no":  7,
+                        "item_id":  207,
+                        "nama":  "Desert Snail",
+                        "total_hp":  110,
+                        "habitat":  "Death Desert",
+                        "item_drop":  "snail shell, Snail Meat",
+                        "image_path":  null
+                    },
+                    {
+                        "id":  8,
+                        "no":  8,
+                        "item_id":  208,
+                        "nama":  "Tentacle Sprout",
+                        "total_hp":  150,
+                        "habitat":  "Death Desert",
+                        "item_drop":  "tentacles, cloudy essence",
+                        "image_path":  null
+                    }
                 ]
 }
