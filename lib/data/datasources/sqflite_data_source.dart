@@ -8,8 +8,10 @@ class SqfliteDataSource implements LocalDataSource {
   static const _dbName = 'companion_app.db';
 
   /// v1 = generic prototype, v2 = Frontier Lands, v3 = weapons & charms,
-  /// v4 = updated weapon stats, v5 = rarity for all categories.
-  static const _dbVersion = 7;
+  /// v4 = updated weapon stats, v5 = rarity for all categories,
+  /// v8 = clean Rules Book Frontier Lands Excel seed data (no hallucinations),
+  /// v9 = maps table + monster item_id + relational sync support.
+  static const _dbVersion = 9;
 
   Database? _db;
 
@@ -33,6 +35,17 @@ class SqfliteDataSource implements LocalDataSource {
       version: _dbVersion,
       onCreate: (db, version) => _createEncyclopediaTables(db),
       onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 8) {
+          final batch = db.batch();
+          for (final category in EntryCategory.values) {
+            batch.execute('DROP TABLE IF EXISTS ${category.tableName}');
+          }
+          await batch.commit(noResult: true);
+        } else if (oldVersion < 9) {
+          try {
+            await db.execute('ALTER TABLE monsters ADD COLUMN item_id INTEGER');
+          } catch (_) {}
+        }
         await _createEncyclopediaTables(db);
       },
     );
@@ -72,11 +85,12 @@ class SqfliteDataSource implements LocalDataSource {
       )
     ''');
 
-    // --- MONSTERS (Tidak berubah) ---
+    // --- MONSTERS ---
     batch.execute('''
       CREATE TABLE IF NOT EXISTS monsters (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        "no" INTEGER NOT NULL,
+        "no" INTEGER,
+        item_id INTEGER,
         nama TEXT NOT NULL,
         title TEXT,
         habitat TEXT,
@@ -119,6 +133,7 @@ class SqfliteDataSource implements LocalDataSource {
       )
     ''');
 
+    // --- ANIMALS ---
     batch.execute('''
       CREATE TABLE IF NOT EXISTS animals (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -128,6 +143,18 @@ class SqfliteDataSource implements LocalDataSource {
         total_hp INTEGER,
         habitat TEXT,
         item_drop TEXT,
+        image_path TEXT
+      )
+    ''');
+
+    // --- MAPS (Habitat / World Maps) ---
+    batch.execute('''
+      CREATE TABLE IF NOT EXISTS maps (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        "no" INTEGER,
+        item_id INTEGER,
+        nama TEXT NOT NULL,
+        deskripsi TEXT,
         image_path TEXT
       )
     ''');

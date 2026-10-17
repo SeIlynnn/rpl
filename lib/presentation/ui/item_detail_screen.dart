@@ -1,4 +1,5 @@
-﻿import 'package:flutter/material.dart';
+import 'dart:io';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/utils/map_parsing.dart';
 import '../../domain/entities/armor.dart';
@@ -9,13 +10,14 @@ import '../../domain/entities/monster.dart';
 import '../../domain/entities/weapon.dart';
 import '../../domain/entities/charm.dart';
 import '../../domain/entities/animal.dart';
+import '../../domain/entities/game_map.dart';
 import '../providers/game_providers.dart';
 import 'category_ui.dart';
 import 'entry_actions.dart';
 import 'entry_widgets.dart';
 
 /// Native Android encyclopedia page: image header, title block, a structured
-/// stat table and cross references (Monster drops <-> Materials).
+/// stat table and cross references (Maps <-> Monsters/Animals <-> Materials).
 class ItemDetailScreen extends ConsumerStatefulWidget {
   final EntryCategory category;
   final int entryId;
@@ -47,6 +49,28 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> {
     super.dispose();
   }
 
+  void _openFullScreenImage(BuildContext context, String imagePath, String title) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (ctx) => Scaffold(
+          backgroundColor: Colors.black,
+          appBar: AppBar(
+            backgroundColor: Colors.black87,
+            foregroundColor: Colors.white,
+            title: Text(title),
+          ),
+          body: Center(
+            child: InteractiveViewer(
+              minScale: 0.5,
+              maxScale: 5.0,
+              child: Image.file(File(imagePath), fit: BoxFit.contain),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final entriesAsync = ref.watch(entriesProvider(widget.category));
@@ -65,6 +89,7 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> {
 
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final hasImage = entry.imagePath != null && File(entry.imagePath!).existsSync();
 
     return Scaffold(
       body: CustomScrollView(
@@ -87,6 +112,15 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> {
               child: Text(displayName(entry.name)),
             ),
             actions: [
+              if (hasImage) ...[
+                _HeaderButton(
+                  floating: !_collapsed,
+                  tooltip: 'Zoom Image / Map Photo',
+                  icon: const Icon(Icons.zoom_in_outlined),
+                  onPressed: () => _openFullScreenImage(context, entry.imagePath!, entry.name),
+                ),
+                const SizedBox(width: 4),
+              ],
               _HeaderButton(
                 floating: !_collapsed,
                 tooltip: 'Edit',
@@ -104,14 +138,42 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> {
             ],
             flexibleSpace: FlexibleSpaceBar(
               collapseMode: CollapseMode.parallax,
-              background: Hero(
-                tag: 'entry-image-${entry.category.name}-${entry.id}',
-                child: EntryImage(
-                  path: entry.imagePath,
-                  placeholderIcon: entry.category.icon,
-                  width: double.infinity,
-                  height: double.infinity,
-                  iconSize: 96,
+              background: GestureDetector(
+                onTap: hasImage
+                    ? () => _openFullScreenImage(context, entry.imagePath!, entry.name)
+                    : () => openEntryForm(context, entry.category, existing: entry),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Hero(
+                      tag: 'entry-image-${entry.category.name}-${entry.id}',
+                      child: EntryImage(
+                        path: entry.imagePath,
+                        placeholderIcon: entry.category.icon,
+                        width: double.infinity,
+                        height: double.infinity,
+                        iconSize: 96,
+                      ),
+                    ),
+                    Positioned(
+                      right: 12,
+                      bottom: 12,
+                      child: FilledButton.tonalIcon(
+                        onPressed: hasImage
+                            ? () => _openFullScreenImage(context, entry.imagePath!, entry.name)
+                            : () => openEntryForm(context, entry.category, existing: entry),
+                        icon: Icon(
+                          hasImage ? Icons.fullscreen : Icons.add_a_photo_outlined,
+                          size: 18,
+                        ),
+                        label: Text(
+                          hasImage
+                              ? (entry is GameMap ? 'Lihat Foto Map' : 'Zoom Foto')
+                              : (entry is GameMap ? 'Tambah Foto Map' : 'Tambah Foto'),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -128,13 +190,23 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> {
               ],
             ),
           ),
-          if (entry is Monster) SliverToBoxAdapter(child: _MonsterDropsSection(monster: entry)),
-          if (entry is GameMaterial) SliverToBoxAdapter(child: _DroppedBySection(material: entry)),
+          if (entry is Monster) ...[
+            SliverToBoxAdapter(child: _CreatureMapsSection(habitats: entry.habitatList)),
+            SliverToBoxAdapter(child: _MonsterDropsSection(drops: entry.dropList)),
+          ],
+          if (entry is Animal) ...[
+            SliverToBoxAdapter(child: _CreatureMapsSection(habitats: entry.habitatList)),
+            SliverToBoxAdapter(child: _MonsterDropsSection(drops: entry.dropList)),
+          ],
+          if (entry is GameMaterial)
+            SliverToBoxAdapter(child: _DroppedBySection(material: entry)),
+          if (entry is GameMap)
+            SliverToBoxAdapter(child: _MapEcosystemSection(gameMap: entry)),
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(24, 8, 24, 32),
               child: Text(
-                'Database ID ${entry.id} Â· ${entry.category.singular}',
+                'Database ID ${entry.id}${entryItemId(entry) != null ? ' · Item ID ${entryItemId(entry)}' : ' · Standalone'} · ${entry.category.singular}',
                 style: theme.textTheme.bodySmall?.copyWith(color: scheme.outline),
               ),
             ),
@@ -178,6 +250,7 @@ class _TitleBlock extends StatelessWidget {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final rarity = entryRarity(entry);
+    final itemId = entryItemId(entry);
     final e = entry;
 
     final String? tagline = switch (e) {
@@ -187,10 +260,13 @@ class _TitleBlock extends StatelessWidget {
       Weapon w => w.role,
       Charm c => c.stats,
       Animal an => an.habitat,
+      GameMap gm => gm.deskripsi,
       _ => null,
     };
 
     final chips = <({IconData icon, String label})>[
+      if (itemId != null) (icon: Icons.qr_code_2, label: 'Item ID #$itemId'),
+      if (itemId == null) (icon: Icons.link_off_outlined, label: 'Standalone ID'),
       if (e is GameMaterial && e.itemDrop != null) (icon: Icons.place_outlined, label: e.itemDrop!),
       if (e is Armor && e.type != null) (icon: Icons.category_outlined, label: e.type!),
       if (e is Monster && e.classification != null)
@@ -215,7 +291,7 @@ class _TitleBlock extends StatelessWidget {
             displayName(entry.name),
             style: theme.textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w700),
           ),
-          if (tagline != null) ...[
+          if (tagline != null && tagline.isNotEmpty) ...[
             const SizedBox(height: 4),
             Text(tagline, style: theme.textTheme.titleMedium?.copyWith(color: scheme.onSurfaceVariant)),
           ],
@@ -267,9 +343,11 @@ class _Section extends StatelessWidget {
                 children: [
                   Icon(icon, size: 20, color: theme.colorScheme.primary),
                   const SizedBox(width: 8),
-                  Text(
-                    title,
-                    style: theme.textTheme.titleSmall?.copyWith(color: theme.colorScheme.primary),
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: theme.textTheme.titleSmall?.copyWith(color: theme.colorScheme.primary),
+                    ),
                   ),
                 ],
               ),
@@ -345,7 +423,7 @@ class _StatRow extends StatelessWidget {
       children: [
         Icon(field.icon, size: 20, color: scheme.onSurfaceVariant),
         const SizedBox(width: 16),
-        Text(field.label, style: labelStyle),
+        Flexible(child: Text(field.label, style: labelStyle)),
       ],
     );
 
@@ -368,7 +446,7 @@ class _StatRow extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          label,
+          Flexible(child: label),
           const SizedBox(width: 16),
           Expanded(child: Align(alignment: Alignment.centerRight, child: valueWidget)),
         ],
@@ -403,21 +481,48 @@ class _PercentValue extends StatelessWidget {
   }
 }
 
-/// "Drops" section on monster pages, linking each drop to its Material entry.
-class _MonsterDropsSection extends ConsumerWidget {
-  final Monster monster;
+/// Links a Monster or Animal's habitat names directly to their GameMap entries.
+class _CreatureMapsSection extends ConsumerWidget {
+  final List<String> habitats;
 
-  const _MonsterDropsSection({required this.monster});
+  const _CreatureMapsSection({required this.habitats});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final drops = monster.dropList;
+    if (habitats.isEmpty) return const SizedBox.shrink();
+    final maps = ref.watch(entriesProvider(EntryCategory.maps)).value ?? const [];
+    final byName = {for (final m in maps) m.name.trim().toLowerCase(): m};
+
+    return _Section(
+      title: 'Habitat / Maps',
+      icon: Icons.map_outlined,
+      children: [
+        for (final hab in habitats)
+          _LinkedTile(
+            name: hab,
+            target: byName[hab.toLowerCase()],
+            fallbackIcon: EntryCategory.maps.icon,
+            missingText: 'Custom / Standalone Map (Tap Edit on Maps tab to add photo)',
+          ),
+      ],
+    );
+  }
+}
+
+/// "Drops" section on monster/animal pages, linking each drop to its Material entry.
+class _MonsterDropsSection extends ConsumerWidget {
+  final List<String> drops;
+
+  const _MonsterDropsSection({required this.drops});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
     final materials = ref.watch(entriesProvider(EntryCategory.materials)).value ?? const [];
     final byName = {for (final m in materials) m.name.trim().toLowerCase(): m};
     final scheme = Theme.of(context).colorScheme;
 
     return _Section(
-      title: 'Drops',
+      title: 'Item Drops',
       icon: Icons.inventory_2_outlined,
       children: drops.isEmpty
           ? [
@@ -431,14 +536,14 @@ class _MonsterDropsSection extends ConsumerWidget {
                   name: drop,
                   target: byName[drop.toLowerCase()],
                   fallbackIcon: EntryCategory.materials.icon,
-                  missingText: 'Not in the Materials database',
+                  missingText: 'Custom / Standalone Drop (Not in Materials DB)',
                 ),
             ],
     );
   }
 }
 
-/// "Dropped by" section on material pages (reverse lookup of monster drops).
+/// "Dropped by / Source" section on material pages (reverse lookup of monster & animal drops + object_drop).
 class _DroppedBySection extends ConsumerWidget {
   final GameMaterial material;
 
@@ -447,24 +552,176 @@ class _DroppedBySection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final monsters = ref.watch(entriesProvider(EntryCategory.monsters)).value ?? const [];
+    final animals = ref.watch(entriesProvider(EntryCategory.animals)).value ?? const [];
+    final maps = ref.watch(entriesProvider(EntryCategory.maps)).value ?? const [];
+
     final needle = (material.namaItem ?? material.name).trim().toLowerCase();
-    final sources = monsters
-        .whereType<Monster>()
-        .where((m) => m.dropList.any((d) => d.toLowerCase() == needle))
-        .toList(growable: false);
-    if (sources.isEmpty) return const SizedBox.shrink();
+    final objectDropTags = MapParsing.splitTags(material.objectDrop);
+    final objectDropLower = objectDropTags.map((e) => e.toLowerCase()).toSet();
+
+    final linkedSources = <EncyclopediaEntry>[];
+    final seenKeys = <String>{};
+
+    void addIfNew(EncyclopediaEntry e) {
+      final key = '${e.category.name}:${e.id ?? e.name.toLowerCase()}';
+      if (seenKeys.add(key)) {
+        linkedSources.add(e);
+      }
+    }
+
+    for (final m in monsters.whereType<Monster>()) {
+      if (m.dropList.any((d) => d.toLowerCase() == needle) ||
+          objectDropLower.contains(m.name.trim().toLowerCase())) {
+        addIfNew(m);
+      }
+    }
+    for (final a in animals.whereType<Animal>()) {
+      if (a.dropList.any((d) => d.toLowerCase() == needle) ||
+          objectDropLower.contains(a.name.trim().toLowerCase())) {
+        addIfNew(a);
+      }
+    }
+    for (final gm in maps.whereType<GameMap>()) {
+      if (objectDropLower.contains(gm.name.trim().toLowerCase())) {
+        addIfNew(gm);
+      }
+    }
+
+    final matchedNamesLower = linkedSources.map((e) => e.name.trim().toLowerCase()).toSet();
+    final customSources = objectDropTags
+        .where((tag) => !matchedNamesLower.contains(tag.toLowerCase()))
+        .toList();
+
+    if (linkedSources.isEmpty && customSources.isEmpty) {
+      return const SizedBox.shrink();
+    }
 
     return _Section(
-      title: 'Dropped by',
+      title: 'Dropped By / Source',
       icon: Icons.pets_outlined,
       children: [
-        for (final monster in sources)
+        for (final source in linkedSources)
           _LinkedTile(
-            name: monster.name,
-            target: monster,
-            fallbackIcon: EntryCategory.monsters.icon,
+            name: source.name,
+            target: source,
+            fallbackIcon: source.category.icon,
             missingText: '',
           ),
+        for (final custom in customSources)
+          _LinkedTile(
+            name: custom,
+            target: null,
+            fallbackIcon: Icons.label_important_outline,
+            missingText: 'Custom / Standalone Source',
+          ),
+      ],
+    );
+  }
+}
+
+/// Ecosystem overview on a Map detail page: Monsters, Animals, and Materials in this Map.
+class _MapEcosystemSection extends ConsumerWidget {
+  final GameMap gameMap;
+
+  const _MapEcosystemSection({required this.gameMap});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final mapNameLower = gameMap.name.trim().toLowerCase();
+    final monsters = ref.watch(entriesProvider(EntryCategory.monsters)).value ?? const [];
+    final animals = ref.watch(entriesProvider(EntryCategory.animals)).value ?? const [];
+    final materials = ref.watch(entriesProvider(EntryCategory.materials)).value ?? const [];
+
+    bool matchesHabitat(List<String> habitatList, String? rawHabitat) {
+      if (habitatList.any((h) => h.toLowerCase() == mapNameLower)) return true;
+      if (rawHabitat != null && rawHabitat.toLowerCase().contains(mapNameLower)) return true;
+      return false;
+    }
+
+    final mapMonsters = monsters
+        .whereType<Monster>()
+        .where((m) => matchesHabitat(m.habitatList, m.habitat))
+        .toList();
+
+    final mapAnimals = animals
+        .whereType<Animal>()
+        .where((a) => matchesHabitat(a.habitatList, a.habitat))
+        .toList();
+
+    // Collect drops from creatures in this map + materials directly linked to this map
+    final creatureDropNames = <String>{
+      for (final m in mapMonsters) ...m.dropList.map((d) => d.toLowerCase()),
+      for (final a in mapAnimals) ...a.dropList.map((d) => d.toLowerCase()),
+    };
+
+    final mapMaterials = materials.whereType<GameMaterial>().where((mat) {
+      final matName = mat.name.trim().toLowerCase();
+      if (creatureDropNames.contains(matName)) return true;
+      final objTags = MapParsing.splitTags(mat.objectDrop).map((t) => t.toLowerCase());
+      return objTags.contains(mapNameLower);
+    }).toList();
+
+    final scheme = Theme.of(context).colorScheme;
+
+    return Column(
+      children: [
+        _Section(
+          title: 'Monsters in ${gameMap.name} (${mapMonsters.length})',
+          icon: EntryCategory.monsters.icon,
+          children: mapMonsters.isEmpty
+              ? [
+                  ListTile(
+                    title: Text('Belum ada Monster di map ini', style: TextStyle(color: scheme.outline)),
+                  ),
+                ]
+              : [
+                  for (final m in mapMonsters)
+                    _LinkedTile(
+                      name: m.name,
+                      target: m,
+                      fallbackIcon: EntryCategory.monsters.icon,
+                      missingText: '',
+                    ),
+                ],
+        ),
+        _Section(
+          title: 'Animals in ${gameMap.name} (${mapAnimals.length})',
+          icon: EntryCategory.animals.icon,
+          children: mapAnimals.isEmpty
+              ? [
+                  ListTile(
+                    title: Text('Belum ada Animal di map ini', style: TextStyle(color: scheme.outline)),
+                  ),
+                ]
+              : [
+                  for (final a in mapAnimals)
+                    _LinkedTile(
+                      name: a.name,
+                      target: a,
+                      fallbackIcon: EntryCategory.animals.icon,
+                      missingText: '',
+                    ),
+                ],
+        ),
+        _Section(
+          title: 'Materials / Drops in ${gameMap.name} (${mapMaterials.length})',
+          icon: EntryCategory.materials.icon,
+          children: mapMaterials.isEmpty
+              ? [
+                  ListTile(
+                    title: Text('Belum ada Material tercatat di map ini', style: TextStyle(color: scheme.outline)),
+                  ),
+                ]
+              : [
+                  for (final mat in mapMaterials)
+                    _LinkedTile(
+                      name: mat.name,
+                      target: mat,
+                      fallbackIcon: EntryCategory.materials.icon,
+                      missingText: '',
+                    ),
+                ],
+        ),
       ],
     );
   }

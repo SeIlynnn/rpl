@@ -1,22 +1,27 @@
+import '../../core/utils/map_parsing.dart';
 import 'encyclopedia_entry.dart';
 import 'entry_category.dart';
 
 class Weapon extends EncyclopediaEntry {
-  final String? role;
-  final String? skillAktif;
+  final int? no;
+  final int? itemId;
   final int? rarity;
-  final String? normalStats;   // Ganti element
-  final String? negativeStats; // Tambahan baru
+  final String? role;
+  final String? normalStats;
+  final String? negativeStats;
+  final String? skillAktif;
 
   Weapon({
     super.id,
     required super.name,
     super.imagePath,
+    this.no,
+    this.itemId,
     this.rarity,
-    this.skillAktif,
     this.role,
     this.normalStats,
     this.negativeStats,
+    this.skillAktif,
   });
 
   @override
@@ -25,27 +30,31 @@ class Weapon extends EncyclopediaEntry {
   @override
   Map<String, Object?> toMap() {
     return {
-      'id': id,
+      if (id != null) 'id': id,
+      'no': no,
+      'item_id': itemId,
       'nama_item': name,
-      'image_path': imagePath,
-      'role': role,
       'rarity': rarity,
-      'skill_aktif': skillAktif,
+      'role': role,
       'normal_stats': normalStats,
       'negative_stats': negativeStats,
+      'skill_aktif': skillAktif,
+      'image_path': imagePath,
     };
   }
 
   factory Weapon.fromMap(Map<String, Object?> map) {
     return Weapon(
-      id: map['id'] as int?,
-      name: map['nama_item'] as String? ?? '',
-      imagePath: map['image_path'] as String?,
-      role: map['role'] as String?,
-      rarity: map['rarity'] as int?,
-      skillAktif: map['skill_aktif'] as String?,
-      normalStats: map['normal_stats'] as String?,
-      negativeStats: map['negative_stats'] as String?,
+      id: MapParsing.asInt(map['id']),
+      no: MapParsing.asInt(map['no']),
+      itemId: MapParsing.asInt(map['item_id']),
+      name: MapParsing.asString(map['nama_item']) ?? '',
+      rarity: MapParsing.asInt(map['rarity']),
+      role: MapParsing.asString(map['role']),
+      normalStats: MapParsing.asString(map['normal_stats']),
+      negativeStats: MapParsing.asString(map['negative_stats']),
+      skillAktif: MapParsing.asString(map['skill_aktif']),
+      imagePath: MapParsing.asString(map['image_path']),
     );
   }
-}
+}

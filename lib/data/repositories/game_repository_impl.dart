@@ -21,6 +21,28 @@ class GameRepositoryImpl implements GameRepository {
     await localDataSource.initDb();
     if (await localDataSource.isEmpty()) {
       await _seedFromAssets();
+    } else {
+      final existingMaps = await localDataSource.getAll(EntryCategory.maps);
+      if (existingMaps.isEmpty) {
+        await _seedMapsOnlyFromAssets();
+      }
+    }
+  }
+
+  Future<void> _seedMapsOnlyFromAssets() async {
+    try {
+      final String jsonString = await seedLoader();
+      if (jsonString.trim().isEmpty) return;
+      final Map<String, dynamic> seed = jsonDecode(jsonString);
+      final mapRecords = seed[EntryCategory.maps.tableName] as List? ?? const [];
+      if (mapRecords.isEmpty) return;
+      final rows = [
+        for (final record in mapRecords)
+          EntryCategory.maps.fromMap(Map<String, Object?>.from(record as Map)).toMap(),
+      ];
+      await localDataSource.bulkInsert({EntryCategory.maps: rows});
+    } catch (e) {
+      debugPrint("Gagal membaca seed maps: $e");
     }
   }
 

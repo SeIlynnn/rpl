@@ -18,15 +18,6 @@ class _MainScreenState extends ConsumerState<MainScreen> {
   final _scaffoldKey = GlobalKey<ScaffoldState>();
 
   @override
-  void initState() {
-    super.initState();
-    // Membuka Drawer secara otomatis saat aplikasi pertama kali dijalankan
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _scaffoldKey.currentState?.openDrawer();
-    });
-  }
-
-  @override
   Widget build(BuildContext context) {
     final selectedCategory = ref.watch(selectedCategoryProvider);
     final searchQuery = ref.watch(searchQueryProvider);
@@ -41,20 +32,29 @@ class _MainScreenState extends ConsumerState<MainScreen> {
         centerTitle: false,
         actions: [
           IconButton(
+            tooltip: 'Maps Overview',
+            icon: Icon(
+              selectedCategory == EntryCategory.maps ? Icons.map : Icons.map_outlined,
+            ),
+            onPressed: () => ref
+                .read(selectedCategoryProvider.notifier)
+                .select(EntryCategory.maps),
+          ),
+          IconButton(
             tooltip: 'About Database',
             icon: const Icon(Icons.info_outline),
             onPressed: () => _showAboutDialog(context, ref),
           ),
         ],
       ),
-      drawer: const CategoryDrawer(), // Menu Drawer tetap ada
+      drawer: const CategoryDrawer(),
       body: Column(
         children: [
           // --- SEARCH BAR GLOBAL (Berlaku di semua kategori) ---
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
             child: SearchBar(
-              hintText: 'Search Database',
+              hintText: 'Search Database (Name, ID, Drop, Map...)',
               leading: const Icon(Icons.search),
               elevation: const WidgetStatePropertyAll(0),
               trailing: [
@@ -83,14 +83,17 @@ class _MainScreenState extends ConsumerState<MainScreen> {
                 ItemListView(category: EntryCategory.weapons),
                 ItemListView(category: EntryCategory.charms),
                 ItemListView(category: EntryCategory.animals),
+                ItemListView(category: EntryCategory.maps),
               ],
             ),
           ),
         ],
       ),
-      // bottomNavigationBar: DIHAPUS sesuai permintaan
-
-      // Tombol + Add tetap dipertahankan
+      bottomNavigationBar: _ModernBottomNavBar(
+        selectedCategory: selectedCategory,
+        onSelect: (category) =>
+            ref.read(selectedCategoryProvider.notifier).select(category),
+      ),
       floatingActionButton: FloatingActionButton.extended(
         heroTag: 'main-fab',
         onPressed: () => openEntryForm(context, selectedCategory),
@@ -113,6 +116,10 @@ class _MainScreenState extends ConsumerState<MainScreen> {
         ref.read(entriesProvider(EntryCategory.weapons)).value?.length ?? 0;
     final charmsCount =
         ref.read(entriesProvider(EntryCategory.charms)).value?.length ?? 0;
+    final animalsCount =
+        ref.read(entriesProvider(EntryCategory.animals)).value?.length ?? 0;
+    final mapsCount =
+        ref.read(entriesProvider(EntryCategory.maps)).value?.length ?? 0;
 
     showDialog(
       context: context,
@@ -128,7 +135,7 @@ class _MainScreenState extends ConsumerState<MainScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('A structured Game Encyclopedia.'),
+              const Text('A structured Game Encyclopedia with interactive relational sync.'),
               const SizedBox(height: 16),
               Text(
                 'Database Statistics:',
@@ -142,6 +149,8 @@ class _MainScreenState extends ConsumerState<MainScreen> {
               _StatItem(label: 'Monsters', count: monstersCount),
               _StatItem(label: 'Weapons', count: weaponsCount),
               _StatItem(label: 'Charms', count: charmsCount),
+              _StatItem(label: 'Animals', count: animalsCount),
+              _StatItem(label: 'Maps', count: mapsCount),
               const Divider(height: 24),
               _StatItem(
                 label: 'Total Entries',
@@ -149,7 +158,9 @@ class _MainScreenState extends ConsumerState<MainScreen> {
                     armorsCount +
                     monstersCount +
                     weaponsCount +
-                    charmsCount,
+                    charmsCount +
+                    animalsCount +
+                    mapsCount,
               ),
             ],
           ),
@@ -160,6 +171,117 @@ class _MainScreenState extends ConsumerState<MainScreen> {
             child: const Text('Close'),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _ModernBottomNavBar extends StatelessWidget {
+  final EntryCategory selectedCategory;
+  final ValueChanged<EntryCategory> onSelect;
+
+  const _ModernBottomNavBar({
+    required this.selectedCategory,
+    required this.onSelect,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    return Material(
+      color: scheme.surfaceContainer,
+      elevation: 3,
+      child: SafeArea(
+        top: false,
+        child: SizedBox(
+          height: 68,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              const categories = EntryCategory.values;
+              final itemWidth = (constraints.maxWidth / categories.length).clamp(64.0, 140.0);
+              final needsScroll = itemWidth * categories.length > constraints.maxWidth + 1;
+
+              final children = [
+                for (final cat in categories)
+                  SizedBox(
+                    width: needsScroll ? 74 : constraints.maxWidth / categories.length,
+                    child: _BottomNavItem(
+                      category: cat,
+                      selected: cat == selectedCategory,
+                      onTap: () => onSelect(cat),
+                    ),
+                  ),
+              ];
+
+              if (needsScroll) {
+                return SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: Row(children: children),
+                );
+              }
+              return Row(children: children);
+            },
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BottomNavItem extends StatelessWidget {
+  final EntryCategory category;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _BottomNavItem({
+    required this.category,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeOutCubic,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+              decoration: BoxDecoration(
+                color: selected ? scheme.secondaryContainer : Colors.transparent,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Icon(
+                selected ? category.selectedIcon : category.icon,
+                size: 22,
+                color: selected ? scheme.onSecondaryContainer : scheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              category.label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.labelSmall?.copyWith(
+                fontSize: 11,
+                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                color: selected ? scheme.onSurface : scheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

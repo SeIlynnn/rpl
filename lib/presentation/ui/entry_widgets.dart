@@ -1,4 +1,4 @@
-﻿import 'dart:io';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import '../../domain/entities/encyclopedia_entry.dart';
 import '../../domain/entities/monster.dart';
@@ -7,6 +7,7 @@ import '../../domain/entities/armor.dart';
 import '../../domain/entities/weapon.dart';
 import '../../domain/entities/charm.dart';
 import '../../domain/entities/animal.dart';
+import '../../domain/entities/game_map.dart';
 
 class EntryImage extends StatelessWidget {
   final String? path;
@@ -118,12 +119,43 @@ int? entryRarity(EncyclopediaEntry entry) {
   return null;
 }
 
+int? entryItemId(EncyclopediaEntry entry) {
+  if (entry is GameMaterial) return entry.itemId;
+  if (entry is Armor) return entry.itemId;
+  if (entry is Monster) return entry.itemId;
+  if (entry is Weapon) return entry.itemId;
+  if (entry is Charm) return entry.itemId;
+  if (entry is Animal) return entry.itemId;
+  if (entry is GameMap) return entry.itemId;
+  return null;
+}
+
 String entrySubtitle(EncyclopediaEntry entry) {
-  if (entry is Monster) return entry.classification ?? entry.title ?? '';
-  if (entry is Animal) return '${entry.habitat ?? ''}${entry.totalHp != null ? ' • HP: ${entry.totalHp}' : ''}';
-  if (entry is Armor) return '${entry.type ?? ''}${entry.stats != null && entry.stats!.isNotEmpty ? ' • ${entry.stats}' : ''}';
-  if (entry is GameMaterial) return '${entry.itemType ?? ''}${entry.itemDrop != null && entry.itemDrop!.isNotEmpty ? ' • ${entry.itemDrop}' : ''}';
-  if (entry is Weapon) return '${entry.role ?? ''}${entry.normalStats != null && entry.normalStats!.isNotEmpty ? ' • ${entry.normalStats}' : ''}';
+  if (entry is Monster) {
+    final parts = [
+      if (entry.classification != null && entry.classification!.isNotEmpty) entry.classification!,
+      if (entry.habitat != null && entry.habitat!.isNotEmpty) entry.habitat!,
+    ];
+    return parts.isEmpty ? (entry.title ?? '') : parts.join(' • ');
+  }
+  if (entry is Animal) {
+    return '${entry.habitat ?? ''}${entry.totalHp != null ? ' • HP: ${entry.totalHp}' : ''}';
+  }
+  if (entry is Armor) {
+    return '${entry.type ?? ''}${entry.stats != null && entry.stats!.isNotEmpty ? ' • ${entry.stats}' : ''}';
+  }
+  if (entry is GameMaterial) {
+    final parts = [
+      if (entry.itemType != null && entry.itemType!.isNotEmpty) entry.itemType!,
+      if (entry.itemDrop != null && entry.itemDrop!.isNotEmpty) entry.itemDrop!,
+      if (entry.objectDrop != null && entry.objectDrop!.isNotEmpty) entry.objectDrop!,
+    ];
+    return parts.join(' • ');
+  }
+  if (entry is Weapon) {
+    return '${entry.role ?? ''}${entry.normalStats != null && entry.normalStats!.isNotEmpty ? ' • ${entry.normalStats}' : ''}';
+  }
   if (entry is Charm) return entry.stats ?? '';
+  if (entry is GameMap) return entry.deskripsi ?? 'Habitat / Map Area';
   return '';
 }

@@ -1,55 +1,79 @@
+import '../../core/utils/map_parsing.dart';
 import 'encyclopedia_entry.dart';
 import 'entry_category.dart';
 
 class Monster extends EncyclopediaEntry {
+  final int? no;
+  final int? itemId;
   final String? title;
-  final String? classification;
   final String? habitat;
+  final String? classification;
+  final String? imunTo;
+  final String? itemDrop;
+  final String? maxHealth;
+  final String? def;
   final String? size;
   final List<String> dropList;
-  final int? no;
 
   Monster({
     super.id,
     required super.name,
     super.imagePath,
-    this.title,
-    this.classification,
-    this.habitat,
-    this.size,
-    this.dropList = const [],
     this.no,
-  });
+    this.itemId,
+    this.title,
+    this.habitat,
+    this.classification,
+    this.imunTo,
+    this.itemDrop,
+    this.maxHealth,
+    this.def,
+    this.size,
+    List<String>? dropList,
+  }) : dropList = dropList ?? MapParsing.splitTags(itemDrop);
+
+  List<String> get habitatList => MapParsing.splitHabitats(habitat);
 
   @override
   EntryCategory get category => EntryCategory.monsters;
 
   @override
   Map<String, Object?> toMap() {
+    final drops = itemDrop ?? (dropList.isEmpty ? null : dropList.join(', '));
     return {
-      'id': id,
-      'nama': name, // <--- Ubah 'name' jadi 'nama' (sesuai DB)
-      'image_path': imagePath,
+      if (id != null) 'id': id,
+      'no': no,
+      'item_id': itemId,
+      'nama': name,
       'title': title,
-      'classification': classification,
       'habitat': habitat,
+      'classification': classification,
+      'imun_to': imunTo,
+      'item_drop': drops,
+      'max_health': maxHealth,
+      'def': def,
       'size': size,
-      'item_drop': dropList.join(', '), // <--- Ubah 'dropList' jadi 'item_drop' (gabung jadi string)
-      '"no"': no, // <--- Pakai tanda kutip ganda sesuai DB
+      'image_path': imagePath,
     };
   }
 
   factory Monster.fromMap(Map<String, Object?> map) {
+    final rawDrop = MapParsing.asString(map['item_drop']);
     return Monster(
-      id: map['id'] as int?,
-      name: map['nama'] as String? ?? '', // <--- Ambil dari 'nama'
-      imagePath: map['image_path'] as String?,
-      title: map['title'] as String?,
-      classification: map['classification'] as String?,
-      habitat: map['habitat'] as String?,
-      size: map['size'] as String?,
-      dropList: (map['item_drop'] as String?)?.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList() ?? [], // <--- Ambil dari 'item_drop'
-      no: map['no'] as int?,
+      id: MapParsing.asInt(map['id']),
+      no: MapParsing.asInt(map['no'] ?? map['"no"']),
+      itemId: MapParsing.asInt(map['item_id']),
+      name: MapParsing.asString(map['nama']) ?? '',
+      title: MapParsing.asString(map['title']),
+      habitat: MapParsing.asString(map['habitat']),
+      classification: MapParsing.asString(map['classification']),
+      imunTo: MapParsing.asString(map['imun_to']),
+      itemDrop: rawDrop,
+      dropList: MapParsing.splitTags(rawDrop),
+      maxHealth: MapParsing.asString(map['max_health']),
+      def: MapParsing.asString(map['def']),
+      size: MapParsing.asString(map['size']),
+      imagePath: MapParsing.asString(map['image_path']),
     );
   }
-}
+}

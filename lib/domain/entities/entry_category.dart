@@ -4,7 +4,8 @@ import 'game_material.dart';
 import 'monster.dart';
 import 'weapon.dart';
 import 'charm.dart';
-import 'animal.dart'; // Tambahkan ini
+import 'animal.dart';
+import 'game_map.dart';
 
 enum EntryCategory {
   materials,
@@ -12,7 +13,8 @@ enum EntryCategory {
   monsters,
   weapons,
   charms,
-  animals; // Tambahkan ini
+  animals,
+  maps;
 
   String get tableName {
     switch (this) {
@@ -21,7 +23,8 @@ enum EntryCategory {
       case EntryCategory.monsters: return 'monsters';
       case EntryCategory.weapons: return 'weapons';
       case EntryCategory.charms: return 'charms';
-      case EntryCategory.animals: return 'animals'; // Tambahkan ini
+      case EntryCategory.animals: return 'animals';
+      case EntryCategory.maps: return 'maps';
     }
   }
 
@@ -32,7 +35,8 @@ enum EntryCategory {
       case EntryCategory.monsters: return Monster.fromMap(map);
       case EntryCategory.weapons: return Weapon.fromMap(map);
       case EntryCategory.charms: return Charm.fromMap(map);
-      case EntryCategory.animals: return Animal.fromMap(map); // Tambahkan ini
+      case EntryCategory.animals: return Animal.fromMap(map);
+      case EntryCategory.maps: return GameMap.fromMap(map);
     }
   }
 

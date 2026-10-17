@@ -1,22 +1,29 @@
+import '../../core/utils/map_parsing.dart';
 import 'encyclopedia_entry.dart';
 import 'entry_category.dart';
 
 class GameMaterial extends EncyclopediaEntry {
-  final String? itemType;
-  final String? itemDrop;
+  final int? no;
+  final int? itemId;
   final String? namaItem;
   final int? rarity;
+  final String? itemType;
+  final String? itemDrop;
   final String? objectDrop;
+  final double? persentase;
 
   GameMaterial({
     super.id,
     required super.name,
     super.imagePath,
-    this.itemType,
+    this.no,
+    this.itemId,
+    this.namaItem,
     this.rarity,
+    this.itemType,
     this.itemDrop,
     this.objectDrop,
-    this.namaItem,
+    this.persentase,
   });
 
   @override
@@ -25,26 +32,33 @@ class GameMaterial extends EncyclopediaEntry {
   @override
   Map<String, Object?> toMap() {
     return {
-      'id': id,
+      if (id != null) 'id': id,
+      'no': no,
+      'item_id': itemId,
       'nama_item': namaItem ?? name,
-      'image_path': imagePath,
       'rarity': rarity,
       'item_type': itemType,
       'item_drop': itemDrop,
       'object_drop': objectDrop,
+      'persentase': persentase,
+      'image_path': imagePath,
     };
   }
 
   factory GameMaterial.fromMap(Map<String, Object?> map) {
+    final nama = MapParsing.asString(map['nama_item']) ?? '';
     return GameMaterial(
-      id: map['id'] as int?,
-      name: map['nama_item'] as String? ?? '', // <--- Ambil dari 'nama_item'
-      imagePath: map['image_path'] as String?,
-      rarity: map['rarity'] as int?,
-      itemType: map['item_type'] as String?, // <--- Ambil dari 'item_type'
-      itemDrop: map['item_drop'] as String?, // <--- Ambil dari 'item_drop'
-      objectDrop: map['object_drop'] as String?,
-      namaItem: map['nama_item'] as String?,
+      id: MapParsing.asInt(map['id']),
+      no: MapParsing.asInt(map['no']),
+      itemId: MapParsing.asInt(map['item_id']),
+      name: nama,
+      namaItem: nama,
+      rarity: MapParsing.asInt(map['rarity']),
+      itemType: MapParsing.asString(map['item_type']),
+      itemDrop: MapParsing.asString(map['item_drop']),
+      objectDrop: MapParsing.asString(map['object_drop']),
+      persentase: MapParsing.asDouble(map['persentase']),
+      imagePath: MapParsing.asString(map['image_path']),
     );
   }
-}
+}

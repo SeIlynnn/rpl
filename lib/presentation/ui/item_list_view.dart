@@ -9,6 +9,7 @@ import '../../domain/entities/armor.dart';
 import '../../domain/entities/charm.dart';
 import '../providers/game_providers.dart';
 import '../../domain/entities/animal.dart';
+import '../../domain/entities/game_map.dart';
 import 'category_ui.dart';
 import 'entry_actions.dart';
 import 'entry_widgets.dart';
@@ -23,16 +24,19 @@ class ItemListView extends ConsumerWidget {
   // Logika pencarian yang mencakup banyak field
   bool _matches(EncyclopediaEntry entry, String query) {
     if (query.isEmpty) return false;
+    final itemId = entryItemId(entry);
     final haystack = [
       entry.name,
+      if (itemId != null) 'id:$itemId #$itemId $itemId',
       entry.category.singular,
       entry.category.label,
-      if (entry is Monster) ...[entry.classification, entry.habitat, entry.title],
+      if (entry is Monster) ...[entry.classification, entry.habitat, entry.title, entry.itemDrop],
       if (entry is GameMaterial) ...[entry.itemType, entry.itemDrop, entry.objectDrop],
       if (entry is Animal) ...[entry.habitat, entry.itemDrop, '${entry.totalHp}'],
       if (entry is Weapon) ...[entry.role, entry.normalStats, entry.negativeStats, entry.skillAktif],
-      if (entry is Armor) ...[entry.type, entry.stats],
+      if (entry is Armor) ...[entry.type, entry.stats, entry.skill],
       if (entry is Charm) ...[entry.stats],
+      if (entry is GameMap) ...[entry.deskripsi],
     ].whereType<String>().join(' ').toLowerCase();
     return haystack.contains(query);
   }
@@ -92,6 +96,7 @@ class _EntryTile extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final rarity = entryRarity(entry);
+    final itemId = entryItemId(entry);
     final subtitle = entrySubtitle(entry);
     final entry0 = entry;
 
@@ -108,11 +113,34 @@ class _EntryTile extends ConsumerWidget {
           borderRadius: BorderRadius.circular(12),
         ),
       ),
-      title: Text(
-        displayName(entry.name),
-        style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
+      title: Row(
+        children: [
+          Flexible(
+            child: Text(
+              displayName(entry.name),
+              style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          if (itemId != null) ...[
+            const SizedBox(width: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text(
+                'ID $itemId',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ],
       ),
       subtitle: subtitle.isEmpty
           ? null
@@ -125,13 +153,18 @@ class _EntryTile extends ConsumerWidget {
       ),
       trailing: rarity != null
           ? RarityBadge(rarity: rarity, dense: true)
-          : entry0 is Monster
+          : entry0 is Monster && entry0.no != null
           ? Text(
         '#${entry0.no}',
         style: theme.textTheme.labelLarge?.copyWith(
           color: theme.colorScheme.outline,
         ),
       )
+          : entry0 is GameMap
+          ? Icon(
+              entry0.imagePath != null ? Icons.photo_library_outlined : Icons.chevron_right,
+              color: theme.colorScheme.outline,
+            )
           : null,
       onTap: () => openEntryDetail(context, entry),
       onLongPress: () => showEntryActionsSheet(context, ref, entry),

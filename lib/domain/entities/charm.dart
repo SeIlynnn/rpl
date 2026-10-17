@@ -1,7 +1,10 @@
+import '../../core/utils/map_parsing.dart';
 import 'encyclopedia_entry.dart';
 import 'entry_category.dart';
 
 class Charm extends EncyclopediaEntry {
+  final int? no;
+  final int? itemId;
   final int? rarity;
   final String? stats;
 
@@ -9,6 +12,8 @@ class Charm extends EncyclopediaEntry {
     super.id,
     required super.name,
     super.imagePath,
+    this.no,
+    this.itemId,
     this.rarity,
     this.stats,
   });
@@ -19,21 +24,25 @@ class Charm extends EncyclopediaEntry {
   @override
   Map<String, Object?> toMap() {
     return {
-      'id': id,
+      if (id != null) 'id': id,
+      'no': no,
+      'item_id': itemId,
       'nama_item': name,
-      'image_path': imagePath,
       'rarity': rarity,
       'stats': stats,
+      'image_path': imagePath,
     };
   }
 
   factory Charm.fromMap(Map<String, Object?> map) {
     return Charm(
-      id: map['id'] as int?,
-      name: map['nama_item'] as String? ?? '',
-      imagePath: map['image_path'] as String?,
-      stats: map['stats'] as String?,
-      rarity: map['rarity'] as int?,
+      id: MapParsing.asInt(map['id']),
+      no: MapParsing.asInt(map['no']),
+      itemId: MapParsing.asInt(map['item_id']),
+      name: MapParsing.asString(map['nama_item']) ?? '',
+      rarity: MapParsing.asInt(map['rarity']),
+      stats: MapParsing.asString(map['stats']),
+      imagePath: MapParsing.asString(map['image_path']),
     );
   }
-}
+}
