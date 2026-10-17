@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../core/utils/map_parsing.dart';
 import '../../core/utils/storage_utils.dart';
+import '../../data/datasources/sqflite_data_source.dart';
 import '../../domain/entities/animal.dart';
 import '../../domain/entities/encyclopedia_entry.dart';
 import '../../domain/entities/entry_category.dart';
@@ -503,7 +504,12 @@ class _ItemFormScreenState extends ConsumerState<ItemFormScreen> {
     if (field.key == 'object_drop' && widget.category == EntryCategory.materials) {
       return _buildMaterialObjectDropPicker(field);
     }
-    if (field.key == 'item_type' || field.key == 'role' || field.key == 'classification' || field.key == 'size') {
+    if (field.key == 'item_type' ||
+        field.key == 'type' ||
+        field.key == 'role' ||
+        field.key == 'classification' ||
+        field.key == 'size' ||
+        field.key == 'imun_to') {
       return _buildQuickPresetField(field);
     }
     return _buildStandardTextField(field);
@@ -1168,8 +1174,14 @@ class _ItemFormScreenState extends ConsumerState<ItemFormScreen> {
   Widget _buildMaterialDropCategoryPicker(FieldSpec field) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final presets = ['Boss', 'monster kecil', 'hewan', 'Tumbuhan', 'Pohon', 'Rock'];
+    final presetKey = '${widget.category.tableName}.${field.key}';
+    final presetsAsync = ref.watch(fieldPresetsProvider(presetKey));
+    final presets = presetsAsync.value ??
+        SqfliteDataSource.defaultFieldPresets[presetKey] ??
+        const <String>[];
     final currentText = _controllers[field.key]?.text.trim() ?? '';
+    final isCustomTyped = currentText.isNotEmpty &&
+        !presets.any((p) => p.toLowerCase() == currentText.toLowerCase());
 
     return Card.outlined(
       margin: EdgeInsets.zero,
@@ -1182,11 +1194,26 @@ class _ItemFormScreenState extends ConsumerState<ItemFormScreen> {
               children: [
                 Icon(field.icon, size: 20, color: scheme.primary),
                 const SizedBox(width: 8),
-                Text(
-                  'Kategori Sumber Drop (Item Drop)',
-                  style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+                Expanded(
+                  child: Text(
+                    'Kategori Sumber Drop (Item Drop)',
+                    style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed: () => _showAddPresetDialog(
+                    presetKey,
+                    'Kategori Drop',
+                    onAdded: (val) => setState(() => _controllers[field.key]?.text = val),
+                  ),
+                  icon: const Icon(Icons.add_circle_outline, size: 18),
+                  label: const Text('+ Saran'),
                 ),
               ],
+            ),
+            Text(
+              'Ketuk saran untuk memilih, atau tekan (×) pada chip untuk menghapus saran yang tidak relevan:',
+              style: theme.textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
             ),
             const SizedBox(height: 8),
             Wrap(
@@ -1199,10 +1226,19 @@ class _ItemFormScreenState extends ConsumerState<ItemFormScreen> {
                   onSelected: (_) => setState(() => _controllers[field.key]?.text = ''),
                 ),
                 for (final preset in presets)
-                  ChoiceChip(
+                  InputChip(
                     label: Text(preset),
                     selected: currentText.toLowerCase() == preset.toLowerCase(),
                     onSelected: (_) => setState(() => _controllers[field.key]?.text = preset),
+                    deleteButtonTooltipMessage: 'Hapus saran "$preset"',
+                    onDeleted: () => _handleDeletePreset(presetKey, preset),
+                  ),
+                if (isCustomTyped)
+                  ActionChip(
+                    avatar: const Icon(Icons.bookmark_add_outlined, size: 16),
+                    label: Text('Simpan "$currentText" ke Saran'),
+                    onPressed: () =>
+                        ref.read(fieldPresetsProvider(presetKey).notifier).addPreset(currentText),
                   ),
               ],
             ),
@@ -1485,49 +1521,184 @@ class _ItemFormScreenState extends ConsumerState<ItemFormScreen> {
     );
   }
 
-  /// 7. Quick-Preset Chips + Custom Input for `item_type`, `role`, `classification`, `size`
+  /// 7. Customizable Quick-Preset Chips (Tambah / Hapus Saran) + Custom Input
+  /// for `item_type`, `type`, `role`, `classification`, `size`, and `imun_to`.
   Widget _buildQuickPresetField(FieldSpec field) {
-    final presets = switch (field.key) {
-      'item_type' => const ['Material', 'Consumable', 'Key Item'],
-      'role' => const ['Tenk', 'Mele', 'Range', 'Support'],
-      'classification' => const [
-          'Small Monster',
-          'Karapas',
-          'Fang Beast',
-          'Abysal',
-          'Ancient Beast',
-          'Umbra Beast',
-          'Flying Beast',
-          'Artificial Being',
-        ],
-      'size' => const ['small', 'medium', 'Large', 'Gargantua'],
-      _ => const <String>[],
-    };
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final presetKey = '${widget.category.tableName}.${field.key}';
+    final presetsAsync = ref.watch(fieldPresetsProvider(presetKey));
+    final presets = presetsAsync.value ??
+        SqfliteDataSource.defaultFieldPresets[presetKey] ??
+        const <String>[];
 
-    final current = _controllers[field.key]?.text.trim() ?? '';
+    final isMultiTag = field.kind == FieldKind.tags;
+    final currentText = _controllers[field.key]?.text.trim() ?? '';
+    final currentTags = isMultiTag ? MapParsing.splitTags(currentText) : const <String>[];
+    final currentTagsLower = currentTags.map((e) => e.toLowerCase()).toSet();
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (presets.isNotEmpty) ...[
-          Wrap(
-            spacing: 8,
-            runSpacing: 6,
-            children: [
-              for (final p in presets)
-                ChoiceChip(
-                  label: Text(p),
-                  visualDensity: VisualDensity.compact,
-                  selected: current.toLowerCase() == p.toLowerCase(),
-                  onSelected: (_) => setState(() => _controllers[field.key]?.text = p),
+    void onTapPreset(String preset) {
+      if (isMultiTag) {
+        final next = List<String>.from(currentTags);
+        final idx = next.indexWhere((e) => e.toLowerCase() == preset.toLowerCase());
+        if (idx >= 0) {
+          next.removeAt(idx);
+        } else {
+          next.add(preset);
+        }
+        setState(() {
+          _controllers[field.key]?.text = next.join(', ');
+        });
+      } else {
+        setState(() {
+          if (currentText.toLowerCase() == preset.toLowerCase()) {
+            _controllers[field.key]?.text = '';
+          } else {
+            _controllers[field.key]?.text = preset;
+          }
+        });
+      }
+    }
+
+    final isCustomTyped = !isMultiTag &&
+        currentText.isNotEmpty &&
+        !presets.any((p) => p.toLowerCase() == currentText.toLowerCase());
+
+    return Card.outlined(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(field.icon, size: 18, color: scheme.primary),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Saran ${field.label}',
+                    style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+                  ),
                 ),
-            ],
-          ),
-          const SizedBox(height: 8),
-        ],
-        _buildStandardTextField(field),
-      ],
+                TextButton.icon(
+                  style: TextButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                  ),
+                  onPressed: () => _showAddPresetDialog(
+                    presetKey,
+                    field.label,
+                    onAdded: (val) => onTapPreset(val),
+                  ),
+                  icon: const Icon(Icons.add_circle_outline, size: 16),
+                  label: const Text('+ Tambah Saran'),
+                ),
+              ],
+            ),
+            Text(
+              'Ketuk untuk memilih, atau tekan (×) untuk menghapus saran yang tidak relevan:',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: scheme.onSurfaceVariant,
+                fontSize: 11.5,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              children: [
+                for (final p in presets)
+                  InputChip(
+                    label: Text(p),
+                    visualDensity: VisualDensity.compact,
+                    selected: isMultiTag
+                        ? currentTagsLower.contains(p.toLowerCase())
+                        : currentText.toLowerCase() == p.toLowerCase(),
+                    onSelected: (_) => onTapPreset(p),
+                    deleteButtonTooltipMessage: 'Hapus saran "$p"',
+                    onDeleted: () => _handleDeletePreset(presetKey, p),
+                  ),
+                if (isCustomTyped)
+                  ActionChip(
+                    visualDensity: VisualDensity.compact,
+                    avatar: const Icon(Icons.bookmark_add_outlined, size: 16),
+                    label: Text('Simpan "$currentText" ke Saran'),
+                    onPressed: () =>
+                        ref.read(fieldPresetsProvider(presetKey).notifier).addPreset(currentText),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            _buildStandardTextField(field),
+          ],
+        ),
+      ),
     );
+  }
+
+  Future<void> _handleDeletePreset(String presetKey, String presetValue) async {
+    await ref.read(fieldPresetsProvider(presetKey).notifier).removePreset(presetValue);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text('Saran "$presetValue" dihapus.'),
+          action: SnackBarAction(
+            label: 'Urungkan',
+            onPressed: () {
+              ref.read(fieldPresetsProvider(presetKey).notifier).addPreset(presetValue);
+            },
+          ),
+        ),
+      );
+  }
+
+  Future<void> _showAddPresetDialog(
+    String presetKey,
+    String fieldLabel, {
+    ValueChanged<String>? onAdded,
+  }) async {
+    final ctrl = TextEditingController();
+    final added = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Tambah Saran $fieldLabel'),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          onSubmitted: (v) {
+            if (v.trim().isNotEmpty) Navigator.pop(ctx, v.trim());
+          },
+          decoration: InputDecoration(
+            labelText: 'Nama Saran / Kategori Baru',
+            hintText: 'Ketik saran untuk $fieldLabel...',
+            border: const OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Batal'),
+          ),
+          FilledButton.icon(
+            onPressed: () {
+              final text = ctrl.text.trim();
+              if (text.isEmpty) return;
+              Navigator.pop(ctx, text);
+            },
+            icon: const Icon(Icons.add),
+            label: const Text('Simpan Saran'),
+          ),
+        ],
+      ),
+    );
+
+    if (added != null && added.isNotEmpty && mounted) {
+      await ref.read(fieldPresetsProvider(presetKey).notifier).addPreset(added);
+      onAdded?.call(added);
+    }
   }
 
   Widget _buildStandardTextField(FieldSpec field) {
@@ -1536,6 +1707,7 @@ class _ItemFormScreenState extends ConsumerState<ItemFormScreen> {
 
     return TextFormField(
       controller: _controllers[field.key],
+      onChanged: (_) => setState(() {}),
       decoration: InputDecoration(
         labelText: field.required ? '${field.label} *' : field.label,
         hintText: field.hint,

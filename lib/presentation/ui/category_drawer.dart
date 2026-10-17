@@ -125,24 +125,44 @@ class CategoryDrawer extends ConsumerWidget {
               ),
             ),
             const Divider(indent: 16, endIndent: 16),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.storage_outlined,
-                    size: 18,
-                    color: theme.colorScheme.outline,
+            Builder(
+              builder: (context) {
+                final syncStatus = ref.watch(hybridSyncStatusProvider).value;
+                final isOnline = syncStatus?.isOnline ?? true;
+                final pending = syncStatus?.pendingCount ?? 0;
+
+                return Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 6, 16, 14),
+                  child: Row(
+                    children: [
+                      Icon(
+                        isOnline ? Icons.cloud_done_outlined : Icons.storage_rounded,
+                        size: 18,
+                        color: isOnline ? Colors.greenAccent : Colors.orangeAccent,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          isOnline
+                              ? 'Hybrid: PostgreSQL + SQLite'
+                              : 'Offline: SQLite Lokal${pending > 0 ? ' ($pending antrean)' : ''}',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: isOnline ? theme.colorScheme.onSurfaceVariant : Colors.orangeAccent,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Sinkronkan Sekarang',
+                        icon: const Icon(Icons.sync, size: 18),
+                        onPressed: () {
+                          ref.read(hybridDataSourceProvider).checkConnectionAndSync(manual: true);
+                        },
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 10),
-                  Text(
-                    'SQLite Seeded Database',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.outline,
-                    ),
-                  ),
-                ],
-              ),
+                );
+              },
             ),
           ],
         ),
@@ -150,3 +170,4 @@ class CategoryDrawer extends ConsumerWidget {
     );
   }
 }
+

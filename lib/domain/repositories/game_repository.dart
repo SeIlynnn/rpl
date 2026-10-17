@@ -9,4 +9,11 @@ abstract class GameRepository {
   Future<void> removeEntry(EntryCategory category, int id);
   Future<String> exportData();
   Future<void> importData(String jsonData);
-}
+
+  Future<List<String>> getPresets(String presetKey);
+  Future<void> addPreset(String presetKey, String value);
+  Future<void> removePreset(String presetKey, String value);
+
+  Future<int> getPendingSyncCount();
+  Future<bool> syncPendingChanges();
+}

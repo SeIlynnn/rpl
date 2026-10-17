@@ -20,4 +20,14 @@ abstract class LocalDataSource {
   // Backup
   Future<String> exportDatabaseToJson();
   Future<void> importDatabaseFromJson(String jsonData);
+
+  // Customizable Category / Field Suggestions (Presets)
+  Future<List<String>> getPresets(String presetKey);
+  Future<void> addPreset(String presetKey, String value);
+  Future<void> removePreset(String presetKey, String value);
+
+  // Hybrid Offline-to-Cloud Sync Queue
+  Future<int> getPendingSyncCount() async => 0;
+  Future<bool> syncPendingChanges() async => true;
 }
+

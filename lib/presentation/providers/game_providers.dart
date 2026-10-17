@@ -1,4 +1,4 @@
-﻿import 'package:flutter/services.dart' show rootBundle;
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/datasources/local_data_source.dart';
 import '../../data/datasources/supabase_data_source.dart';
@@ -10,8 +10,22 @@ import '../../domain/entities/entry_category.dart';
 const seedAssetPath = 'assets/seed_data.json';
 
 // --- Core Database Providers ---
-final localDataSourceProvider =
-Provider<LocalDataSource>((ref) => SupabaseDataSource());
+final hybridDataSourceProvider = Provider<SupabaseDataSource>((ref) {
+  return SupabaseDataSource();
+});
+
+final localDataSourceProvider = Provider<LocalDataSource>((ref) {
+  return ref.watch(hybridDataSourceProvider);
+});
+
+/// Live stream of Hybrid Database status (Online PostgreSQL vs Offline SQLite + Sync Queue).
+final hybridSyncStatusProvider = StreamProvider<HybridSyncStatus>((ref) async* {
+  final ds = ref.watch(hybridDataSourceProvider);
+  yield ds.currentStatus;
+  await for (final status in ds.statusStream) {
+    yield status;
+  }
+});
 
 /// Opens SQLite and seeds it from [seedAssetPath] on first launch.
 final repositoryProvider = FutureProvider<GameRepository>((ref) async {
@@ -38,7 +52,7 @@ class EntriesNotifier extends AsyncNotifier<List<EncyclopediaEntry>> {
     final repo = await ref.read(repositoryProvider.future);
     await repo.addEntry(entry);
     ref.invalidateSelf();
-    ref.invalidate(allEntriesProvider); // Refresh daftar global
+    ref.invalidate(allEntriesProvider);
     await future;
   }
 
@@ -46,7 +60,7 @@ class EntriesNotifier extends AsyncNotifier<List<EncyclopediaEntry>> {
     final repo = await ref.read(repositoryProvider.future);
     await repo.editEntry(entry);
     ref.invalidateSelf();
-    ref.invalidate(allEntriesProvider); // Refresh daftar global
+    ref.invalidate(allEntriesProvider);
     await future;
   }
 
@@ -54,15 +68,48 @@ class EntriesNotifier extends AsyncNotifier<List<EncyclopediaEntry>> {
     final id = entry.id;
     if (id == null) return;
     final repo = await ref.read(repositoryProvider.future);
-    await repo.removeEntry(entry.category, id); // Pakai entry.category
+    await repo.removeEntry(entry.category, id);
     ref.invalidateSelf();
-    ref.invalidate(allEntriesProvider); // Refresh daftar global
+    ref.invalidate(allEntriesProvider);
     await future;
   }
 }
 
 final entriesProvider = AsyncNotifierProvider.family<EntriesNotifier,
     List<EncyclopediaEntry>, EntryCategory>(EntriesNotifier.new);
+
+// --- Customizable Field / Category Suggestions (Add & Delete Presets) ---
+class FieldPresetsNotifier extends AsyncNotifier<List<String>> {
+  final String presetKey;
+  FieldPresetsNotifier(this.presetKey);
+
+  @override
+  Future<List<String>> build() async {
+    final repo = await ref.watch(repositoryProvider.future);
+    return repo.getPresets(presetKey);
+  }
+
+  Future<void> addPreset(String value) async {
+    final clean = value.trim();
+    if (clean.isEmpty) return;
+    final repo = await ref.read(repositoryProvider.future);
+    await repo.addPreset(presetKey, clean);
+    ref.invalidateSelf();
+    await future;
+  }
+
+  Future<void> removePreset(String value) async {
+    final clean = value.trim();
+    if (clean.isEmpty) return;
+    final repo = await ref.read(repositoryProvider.future);
+    await repo.removePreset(presetKey, clean);
+    ref.invalidateSelf();
+    await future;
+  }
+}
+
+final fieldPresetsProvider = AsyncNotifierProvider.family<FieldPresetsNotifier,
+    List<String>, String>(FieldPresetsNotifier.new);
 
 // --- Provider untuk Pencarian Global (Semua Kategori) ---
 final allEntriesProvider = FutureProvider<List<EncyclopediaEntry>>((ref) async {
@@ -86,8 +133,8 @@ class SelectedCategoryNotifier extends Notifier<EntryCategory> {
 }
 
 final selectedCategoryProvider =
-NotifierProvider<SelectedCategoryNotifier, EntryCategory>(
-    SelectedCategoryNotifier.new);
+    NotifierProvider<SelectedCategoryNotifier, EntryCategory>(
+        SelectedCategoryNotifier.new);
 
 // --- UI State Provider (Global Search Query) ---
 class SearchQueryNotifier extends Notifier<String> {
@@ -99,4 +146,4 @@ class SearchQueryNotifier extends Notifier<String> {
 }
 
 final searchQueryProvider =
-NotifierProvider<SearchQueryNotifier, String>(SearchQueryNotifier.new);
+    NotifierProvider<SearchQueryNotifier, String>(SearchQueryNotifier.new);

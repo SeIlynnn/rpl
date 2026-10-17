@@ -10,8 +10,28 @@ class SqfliteDataSource implements LocalDataSource {
   /// v1 = generic prototype, v2 = Frontier Lands, v3 = weapons & charms,
   /// v4 = updated weapon stats, v5 = rarity for all categories,
   /// v8 = clean Rules Book Frontier Lands Excel seed data (no hallucinations),
-  /// v9 = maps table + monster item_id + relational sync support.
-  static const _dbVersion = 9;
+  /// v9 = maps table + monster item_id + relational sync support,
+  /// v10 = hybrid offline sync_queue + customizable field_presets.
+  static const _dbVersion = 10;
+
+  static const Map<String, List<String>> defaultFieldPresets = {
+    'materials.item_drop': ['Boss', 'monster kecil', 'hewan', 'Tumbuhan', 'Pohon', 'Rock'],
+    'materials.item_type': ['Material', 'Consumable', 'Key Item'],
+    'armors.type': ['Armor'],
+    'weapons.role': ['Tenk', 'Mele', 'Range', 'Support'],
+    'monsters.classification': [
+      'Small Monster',
+      'Karapas',
+      'Fang Beast',
+      'Abysal',
+      'Ancient Beast',
+      'Umbra Beast',
+      'Flying Beast',
+      'Artificial Being',
+    ],
+    'monsters.size': ['small', 'medium', 'Large', 'Gargantua'],
+    'monsters.imun_to': ['Burning', 'Poison', 'Paralyze', 'Knockback'],
+  };
 
   Database? _db;
 
@@ -159,6 +179,28 @@ class SqfliteDataSource implements LocalDataSource {
       )
     ''');
 
+    // --- HYBRID OFFLINE SYNC QUEUE ---
+    batch.execute('''
+      CREATE TABLE IF NOT EXISTS sync_queue (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        table_name TEXT NOT NULL,
+        action TEXT NOT NULL,
+        record_id INTEGER,
+        payload TEXT,
+        created_at INTEGER NOT NULL
+      )
+    ''');
+
+    // --- CUSTOMIZABLE FIELD SUGGESTIONS / PRESETS ---
+    batch.execute('''
+      CREATE TABLE IF NOT EXISTS field_presets (
+        preset_key TEXT NOT NULL,
+        preset_value TEXT NOT NULL,
+        is_deleted INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (preset_key, preset_value)
+      )
+    ''');
+
     await batch.commit(noResult: true);
   }
 
@@ -179,7 +221,11 @@ class SqfliteDataSource implements LocalDataSource {
       final batch = txn.batch();
       rowsByCategory.forEach((category, rows) {
         for (final row in rows) {
-          batch.insert(category.tableName, row);
+          batch.insert(
+            category.tableName,
+            row,
+            conflictAlgorithm: ConflictAlgorithm.replace,
+          );
         }
       });
       await batch.commit(noResult: true);
@@ -193,7 +239,11 @@ class SqfliteDataSource implements LocalDataSource {
 
   @override
   Future<int> insert(EntryCategory category, Map<String, Object?> row) {
-    return _database.insert(category.tableName, row);
+    return _database.insert(
+      category.tableName,
+      row,
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
   }
 
   @override
@@ -234,4 +284,117 @@ class SqfliteDataSource implements LocalDataSource {
       }
     });
   }
-}
+
+  // --- Preset Suggestions Management ---
+  @override
+  Future<List<String>> getPresets(String presetKey) async {
+    final defaults = List<String>.from(defaultFieldPresets[presetKey] ?? const []);
+    final rows = await _database.query(
+      'field_presets',
+      where: 'preset_key = ?',
+      whereArgs: [presetKey],
+    );
+
+    final deletedLower = <String>{};
+    final addedValues = <String>[];
+
+    for (final row in rows) {
+      final val = (row['preset_value'] as String?)?.trim() ?? '';
+      if (val.isEmpty) continue;
+      final isDeleted = (row['is_deleted'] as int? ?? 0) == 1;
+      if (isDeleted) {
+        deletedLower.add(val.toLowerCase());
+      } else {
+        addedValues.add(val);
+      }
+    }
+
+    final result = <String>[];
+    final seenLower = <String>{};
+
+    for (final d in defaults) {
+      final lower = d.toLowerCase();
+      if (!deletedLower.contains(lower) && seenLower.add(lower)) {
+        result.add(d);
+      }
+    }
+    for (final a in addedValues) {
+      final lower = a.toLowerCase();
+      if (!deletedLower.contains(lower) && seenLower.add(lower)) {
+        result.add(a);
+      }
+    }
+    return result;
+  }
+
+  @override
+  Future<void> addPreset(String presetKey, String value) async {
+    final clean = value.trim();
+    if (clean.isEmpty) return;
+    await _database.insert(
+      'field_presets',
+      {
+        'preset_key': presetKey,
+        'preset_value': clean,
+        'is_deleted': 0,
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  @override
+  Future<void> removePreset(String presetKey, String value) async {
+    final clean = value.trim();
+    if (clean.isEmpty) return;
+    // Remove case-insensitive match first, then store tombstoned entry so default presets stay removed
+    await _database.delete(
+      'field_presets',
+      where: 'preset_key = ? AND LOWER(preset_value) = ?',
+      whereArgs: [presetKey, clean.toLowerCase()],
+    );
+    await _database.insert(
+      'field_presets',
+      {
+        'preset_key': presetKey,
+        'preset_value': clean,
+        'is_deleted': 1,
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  // --- Offline Sync Queue Helpers ---
+  Future<void> enqueueSync(
+    String tableName,
+    String action, {
+    int? recordId,
+    Map<String, Object?>? payload,
+  }) async {
+    await _database.insert('sync_queue', {
+      'table_name': tableName,
+      'action': action,
+      'record_id': recordId,
+      'payload': payload == null ? null : jsonEncode(payload),
+      'created_at': DateTime.now().millisecondsSinceEpoch,
+    });
+  }
+
+  Future<List<Map<String, Object?>>> getSyncQueue() async {
+    return _database.query('sync_queue', orderBy: 'id ASC');
+  }
+
+  Future<void> removeSyncQueueItem(int queueId) async {
+    await _database.delete('sync_queue', where: 'id = ?', whereArgs: [queueId]);
+  }
+
+  @override
+  Future<int> getPendingSyncCount() async {
+    final count = Sqflite.firstIntValue(
+      await _database.rawQuery('SELECT COUNT(*) FROM sync_queue'),
+    );
+    return count ?? 0;
+  }
+
+  @override
+  Future<bool> syncPendingChanges() async => true;
+}

@@ -102,4 +102,20 @@ class GameRepositoryImpl implements GameRepository {
 
   @override
   Future<void> importData(String jsonData) => localDataSource.importDatabaseFromJson(jsonData);
-}
+
+  @override
+  Future<List<String>> getPresets(String presetKey) => localDataSource.getPresets(presetKey);
+
+  @override
+  Future<void> addPreset(String presetKey, String value) => localDataSource.addPreset(presetKey, value);
+
+  @override
+  Future<void> removePreset(String presetKey, String value) =>
+      localDataSource.removePreset(presetKey, value);
+
+  @override
+  Future<int> getPendingSyncCount() => localDataSource.getPendingSyncCount();
+
+  @override
+  Future<bool> syncPendingChanges() => localDataSource.syncPendingChanges();
+}
