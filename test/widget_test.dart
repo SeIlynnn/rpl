@@ -13,9 +13,7 @@ void main() {
     );
 
     // Initial frame loads
-    expect(find.byType(NavigationBar), findsOneWidget);
-    expect(find.text('Materials'), findsWidgets);
-    expect(find.text('Armors'), findsWidgets);
-    expect(find.text('Monsters'), findsWidgets);
+    expect(find.byType(SearchBar), findsOneWidget);
+    expect(find.byType(AppBar), findsOneWidget);
   });
 }
