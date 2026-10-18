@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../domain/entities/entry_category.dart';
 import 'local_data_source.dart';
@@ -111,7 +112,9 @@ class SupabaseDataSource implements LocalDataSource {
 
   Future<bool> _checkInternetReachable() async {
     try {
-      final result = await InternetAddress.lookup('qqgidnsnnmbvnsvpoifb.supabase.co')
+      final supabaseUrl = dotenv.env['SUPABASE_URL'] ?? '';
+      final host = supabaseUrl.isNotEmpty ? Uri.parse(supabaseUrl).host : 'google.com';
+      final result = await InternetAddress.lookup(host)
           .timeout(const Duration(seconds: 2));
       return result.isNotEmpty && result.first.rawAddress.isNotEmpty;
     } catch (_) {
