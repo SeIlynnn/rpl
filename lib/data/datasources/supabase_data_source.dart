@@ -113,7 +113,13 @@ class SupabaseDataSource implements LocalDataSource {
   Future<bool> _checkInternetReachable() async {
     try {
       final supabaseUrl = dotenv.env['SUPABASE_URL'] ?? '';
-      final host = supabaseUrl.isNotEmpty ? Uri.parse(supabaseUrl).host : 'google.com';
+      String host = 'google.com';
+      if (supabaseUrl.isNotEmpty) {
+        try {
+          final uriHost = Uri.parse(supabaseUrl).host;
+          if (uriHost.isNotEmpty) host = uriHost;
+        } catch (_) {}
+      }
       final result = await InternetAddress.lookup(host)
           .timeout(const Duration(seconds: 2));
       return result.isNotEmpty && result.first.rawAddress.isNotEmpty;
