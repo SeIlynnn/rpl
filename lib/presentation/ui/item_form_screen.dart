@@ -385,9 +385,10 @@ class _ItemFormScreenState extends ConsumerState<ItemFormScreen> {
       }
       await _performRelationalSync(entry);
     } catch (e) {
+      debugPrint('Save failed: $e');
       if (!mounted) return;
       setState(() => _isSaving = false);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Save failed: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Gagal menyimpan data. Silakan coba lagi.')));
       return;
     }
 

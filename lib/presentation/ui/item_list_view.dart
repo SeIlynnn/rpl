@@ -78,10 +78,13 @@ class ItemListView extends ConsumerWidget {
         );
       },
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (err, stack) => _ErrorState(
-        message: '$err',
-        onRetry: () => ref.invalidate(repositoryProvider),
-      ),
+      error: (err, stack) {
+        debugPrint('Load failed: $err\n$stack');
+        return _ErrorState(
+          message: 'Terjadi kesalahan saat memuat data. Silakan coba lagi.',
+          onRetry: () => ref.invalidate(repositoryProvider),
+        );
+      },
     );
   }
 }
